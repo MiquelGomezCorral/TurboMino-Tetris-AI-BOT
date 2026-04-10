@@ -1,5 +1,4 @@
-# General Python Project Template
-Python Artifical Intelligence Template
+# TurboMino: Tetris AI Bot
 
 [English](#english) | [Español](#español)
 
