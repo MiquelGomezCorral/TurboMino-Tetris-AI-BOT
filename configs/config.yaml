@@ -1,0 +1,13 @@
+exp_name: "base_name"
+seed: 42
+
+gym_id: null
+learning_rate: 2.5e-4
+total_timesteps: 25000
+
+torch_deterministic: True
+cuda: True
+
+track_run: False
+wandb_project_name: "RL"
+wandb_entity: null
