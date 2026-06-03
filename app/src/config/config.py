@@ -20,6 +20,8 @@ class Configuration:
     LOGS_PATH: str = os.path.join("..", "logs")
     yaml_config_path: str = None
 
+    raw_dataset_path: str = os.path.join(DATA_PATH, "data.csv")
+
     # ===================================================================
     #                       PARAMETER
     # ===================================================================
@@ -28,15 +30,7 @@ class Configuration:
     seed:     int = 42
 
     gym_id:          str = None
-    learning_rate: float = 2.5e-4
     total_timesteps: int = 25_000
-
-    torch_deterministic: bool = True
-    cuda:                bool = True
-
-    track_run:         bool = False
-    wandb_project_name: str = "RL"
-    wandb_entity:       str = None
 
     def __post_init__(self):
         # Basic setup: create folders and load yaml config if provided
