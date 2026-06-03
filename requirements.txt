@@ -3,3 +3,4 @@ dotenv>=0.9.9
 setuptools>=80.9.0
 PyYAML>=6.0
 pandas==3.0.3
+pygame==2.6.1
