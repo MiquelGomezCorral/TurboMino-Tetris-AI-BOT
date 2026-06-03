@@ -3,6 +3,8 @@ from collections import deque
 import numpy as np
 import enum
 
+from .scoring import SpinType, ScoringSystem
+
 # ===================================================================
 #                       ENUMS
 # ===================================================================
@@ -35,8 +37,8 @@ class ActionEnum(enum.Enum):
     HOLD    = 6
 
 ROTATION_DIR = {
-    ActionEnum.ROTATE_CW:  -1,
-    ActionEnum.ROTATE_CCW:  1,
+    ActionEnum.ROTATE_CW:   1,
+    ActionEnum.ROTATE_CCW: -1,
     ActionEnum.ROTATE_180:  2,
 }
 
@@ -118,7 +120,7 @@ class ActivePiece:
         base_arr = np.array(base, dtype=bool)
         rotations = []
         for i in range(4):
-            rot = np.rot90(base_arr, k=-i)
+            rot = np.rot90(base_arr, k=i)
             row_ints = [sum((1 << j) for j, val in enumerate(row) if val) for row in rot]
             rotations.append(row_ints)
         PRECOMPUTED_MASKS[p_type] = rotations
@@ -157,7 +159,6 @@ class ActivePiece:
         self.y = y
     
 class Board:
-    # SRS offset tables for wall kicks
     SRS_OFFSETS_STANDARD = {
         (RotationEnum.SPAWN,   RotationEnum.RIGHT):   [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
         (RotationEnum.RIGHT,   RotationEnum.SPAWN):   [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
@@ -182,9 +183,9 @@ class Board:
 
     SRS_OFFSETS_180 = {
         (RotationEnum.SPAWN,   RotationEnum.REVERSE): [(0, 0), (0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)],
-        (RotationEnum.RIGHT,   RotationEnum.LEFT):    [(0, 0), (1, 0), (1, 2), (1, 1), (0, 2), (0, 1)],
+        (RotationEnum.RIGHT,   RotationEnum.LEFT):    [(0, 0), (1, 0), (1, -2), (1, -1), (0, -2), (0, -1)],
         (RotationEnum.REVERSE, RotationEnum.SPAWN):   [(0, 0), (0, -1), (-1, -1), (1, -1), (-1, 0), (1, 0)],
-        (RotationEnum.LEFT,    RotationEnum.RIGHT):    [(0, 0), (-1, 0), (-1, 2), (-1, 1), (0, 2), (0, 1)]
+        (RotationEnum.LEFT,    RotationEnum.RIGHT):    [(0, 0), (-1, 0), (-1, -2), (-1, -1), (0, -2), (0, -1)]
     }
 
 
@@ -286,7 +287,7 @@ class Board:
         self._burn_piece(piece)
         return self._clear_lines()
 
-    def attempt_rotation(self, piece: ActivePiece, action: ActionEnum):
+    def attempt_rotation(self, piece: ActivePiece, action: ActionEnum) -> int:
         direction = ROTATION_DIR[action]
         next_rot = (piece.rotation_state + direction) % 4
         next_mask = piece.masks[next_rot]
@@ -294,7 +295,8 @@ class Board:
         if piece.type == PieceEnum.O:
             if not self.check_collision(next_mask, piece.x, piece.y):
                 piece.rotation_state = RotationEnum(next_rot)
-            return
+                return 0
+            return -1
 
         if action == ActionEnum.ROTATE_180:
             offsets = self.SRS_OFFSETS_180.get((piece.rotation_state, next_rot), [(0, 0)])
@@ -302,12 +304,46 @@ class Board:
             table = self.SRS_OFFSETS_I if piece.type == PieceEnum.I else self.SRS_OFFSETS_STANDARD
             offsets = table.get((piece.rotation_state, next_rot), [(0, 0)])
 
-        for dx, dy in offsets:
+        for i, (dx, dy) in enumerate(offsets):
             if not self.check_collision(next_mask, piece.x + dx, piece.y + dy):
                 piece.x += dx
                 piece.y += dy
                 piece.rotation_state = RotationEnum(next_rot)
-                return
+                return i
+        return -1
+
+    def check_t_spin(self, piece: ActivePiece, last_action_was_rotation: bool, last_kick_index: int) -> SpinType:
+        if piece.type != PieceEnum.T or not last_action_was_rotation:
+            return SpinType.NONE
+
+        corners = [(0, 0), (2, 0), (0, 2), (2, 2)]
+        filled_corners = 0
+
+        front_corners_map = {
+            RotationEnum.SPAWN:   [(0, 2), (2, 2)],
+            RotationEnum.RIGHT:   [(0, 0), (0, 2)],
+            RotationEnum.REVERSE: [(0, 0), (2, 0)],
+            RotationEnum.LEFT:    [(2, 0), (2, 2)],
+        }
+        front_corners = front_corners_map[piece.rotation_state]
+        front_filled = 0
+
+        for cx, cy in corners:
+            bx, by = piece.x + cx, piece.y + cy
+            if bx < 0 or bx >= self.width or by < 0 or by >= self.height:
+                is_filled = True
+            else:
+                is_filled = bool(self.b_rows[by] & (1 << bx))
+            if is_filled:
+                filled_corners += 1
+                if (cx, cy) in front_corners:
+                    front_filled += 1
+
+        if filled_corners >= 3:
+            if front_filled == 2 or last_kick_index == 4:
+                return SpinType.REGULAR
+            return SpinType.MINI
+        return SpinType.NONE
 
     def move_piece(self, piece: ActivePiece, dx: int, dy: int) -> bool:
         can_move = not self.check_collision(piece.current_mask, piece.x + dx, piece.y + dy)
@@ -315,7 +351,6 @@ class Board:
             piece.x += dx
             piece.y += dy
 
-        print()
         return can_move
 
     def move_piece_left(self, piece: ActivePiece) -> bool:
@@ -340,24 +375,38 @@ class Board:
         return drop_distance
     
     def print_board(self, active_piece=None, include_vanish_zone=False):
-        if include_vanish_zone:
-            render_rows = self.b_rows.copy()
+        row_count = self.height if include_vanish_zone else self.visible_height
+
+        if self.color_map:
+            for y in range(row_count):
+                line = ''
+                for x in range(self.width):
+                    if self.b_rows[y] & (1 << x):
+                        line += PieceEnum(self.c_rows[y, x]).name
+                    else:
+                        from_active = False
+                        if active_piece:
+                            ly = y - active_piece.y
+                            lx = x - active_piece.x
+                            if 0 <= ly < 4 and 0 <= lx < 4:
+                                from_active = bool(active_piece.current_mask[ly] & (1 << lx))
+                        line += active_piece.type.name if from_active else '.'
+                print(line)
         else:
-            render_rows = self.b_rows[:self.visible_height].copy()
+            render_rows = self.b_rows.copy() if include_vanish_zone else self.b_rows[:self.visible_height].copy()
 
-        if active_piece is not None:
-            for local_y, row_mask in enumerate(active_piece.current_mask):
-                if row_mask == 0:
-                    continue
+            if active_piece is not None:
+                for local_y, row_mask in enumerate(active_piece.current_mask):
+                    if row_mask == 0:
+                        continue
+                    by = active_piece.y + local_y
+                    if 0 <= by < len(render_rows):
+                        shifted = row_mask << active_piece.x if active_piece.x >= 0 else row_mask >> abs(active_piece.x)
+                        render_rows[by] |= shifted
 
-                by = active_piece.y + local_y
-                if (0 <= by < self.visible_height) or (include_vanish_zone and 0 <= by < self.height):
-                    shifted = row_mask << active_piece.x if active_piece.x >= 0 else row_mask >> abs(active_piece.x)
-                    render_rows[by] |= shifted
-
-        for row in reversed(render_rows):
-            line = ''.join('X' if row & (1 << i) else '.' for i in range(self.width))
-            print(line)
+            for row in render_rows:
+                line = ''.join('X' if row & (1 << i) else '.' for i in range(self.width))
+                print(line)
 
 
 # ===================================================================
@@ -368,30 +417,54 @@ class Tetris:
     hold_piece: PieceEnum | None
     queue: Queue
     board: Board
-    def __init__(self, width: int = 10, height: int = 20, vanish_zone: int = 4, color_map: bool = False, playfield: str = None):
+    def __init__(
+        self, 
+        width: int = 10, height: int = 20, vanish_zone: int = 4, 
+        color_map: bool = False, 
+        playfield: str = None, 
+        next_pieces: str = None,
+        active_piece: str = None,
+        hold_piece: str = None,
+    ):
         self.board = Board(width, height, vanish_zone, color_map, playfield)
-        self.queue = Queue()
-        self.active_piece = ActivePiece(self.queue.pop_piece())
-        self.hold_piece = None
-        self.can_hold = True # Flag to prevent multiple holds in one turn
+        self.queue = Queue(next_pieces)
+
+        if active_piece:
+            self.active_piece = ActivePiece(PieceEnum[active_piece])
+        else:
+            self.active_piece = ActivePiece(self.queue.pop_piece())
+        
+        self.hold_piece = PieceEnum[hold_piece] if hold_piece else None
+        self.can_hold = True
+        self.score_system = ScoringSystem()
+        self.last_action_was_rotation = False
+        self.last_kick_index = -1
 
     def spawn_piece(self):
         self.active_piece.reset_piece(self.queue.pop_piece())
-    
-        
+
     def move_active_piece(self, action: ActionEnum):
         cleared_lines = 0
         if action == ActionEnum.LEFT:
             self.board.move_piece_left(self.active_piece)
+            self.last_action_was_rotation = False
         elif action == ActionEnum.RIGHT:
             self.board.move_piece_right(self.active_piece)
+            self.last_action_was_rotation = False
         elif action in (ActionEnum.ROTATE_CW, ActionEnum.ROTATE_CCW, ActionEnum.ROTATE_180):
-            self.board.attempt_rotation(self.active_piece, action)
+            kick_idx = self.board.attempt_rotation(self.active_piece, action)
+            self.last_action_was_rotation = kick_idx >= 0
+            self.last_kick_index = kick_idx
         elif action == ActionEnum.DROP:
-            self.board.hard_drop(self.active_piece)
+            drop_distance = self.board.hard_drop(self.active_piece)
+            spin = self.board.check_t_spin(self.active_piece, self.last_action_was_rotation, self.last_kick_index)
             cleared_lines = self.board.lock_piece(self.active_piece)
+            perfect_clear = cleared_lines > 0 and all(self.board.b_rows[i] == 0 for i in range(self.board.visible_height))
+            self.score_system.evaluate_drop(cleared_lines, spin, perfect_clear, drop_distance, hard_drop=True)
             self.spawn_piece()
-            self.can_hold = True # Reset hold availability on new piece spawn
+            self.can_hold = True
+            self.last_action_was_rotation = False
+            self.last_kick_index = -1
         elif action == ActionEnum.HOLD and self.can_hold:
             if self.hold_piece is None:
                 self.hold_piece = self.active_piece.type
@@ -400,11 +473,35 @@ class Tetris:
                 self.hold_piece, self.active_piece.type = self.active_piece.type, self.hold_piece
                 self.active_piece.reset_piece(self.active_piece.type)
 
-            self.can_hold = False # Disable further holds until next piece spawn
+            self.can_hold = False
+            self.last_action_was_rotation = False
 
         return cleared_lines
 
-    def print_state(self, include_vanish_zone=True):
+    def get_board_state(self, include_vanish_zone=False):
+        if include_vanish_zone:
+            return self.board.b_rows.copy()
+        else:
+            return self.board.b_rows[:self.board.visible_height].copy()
+
+    def get_active_piece_info(self):
+        return {
+            'type': self.active_piece.type,
+            'x': self.active_piece.x,
+            'y': self.active_piece.y,
+            'rotation': self.active_piece.rotation_state
+        }
+
+    def get_swappable_hold(self):
+        return self.hold_piece
+
+    def get_swap_piece(self):
+        return self.hold_piece
+
+    def get_next_pieces(self):
+        return [piece.name for piece in self.queue.pieces]
+
+    def print_state(self, include_vanish_zone=False):
         print("Current Board:")
         self.board.print_board(self.active_piece, include_vanish_zone=include_vanish_zone)
         print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
