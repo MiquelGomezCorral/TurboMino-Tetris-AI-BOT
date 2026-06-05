@@ -538,6 +538,9 @@ class Tetris:
     def get_next_pieces(self):
         return [piece.name for piece in self.queue.pieces]
 
+    def get_score(self):
+        return self.score_system.score
+
     def print_state(self, include_vanish_zone=False):
         print("Current Board:")
         self.board.print_board(active_piece=self.active_piece, include_vanish_zone=include_vanish_zone)
