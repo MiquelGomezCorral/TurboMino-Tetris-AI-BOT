@@ -196,6 +196,8 @@ class Board:
 
     def __init__(self, width: int = 10, height: int = 20, vanish_zone: int = 4, color_map: bool = False, playfield: str = None):
         assert width > 0 and height > 0, "Width and height must be positive integers."
+        assert width <= 40 and height <= 40, "Width and height must be positive integers."
+        assert vanish_zone >= 0, "Vanish zone must be a non-negative integer."
 
         self.width = width
         self.visible_height = height

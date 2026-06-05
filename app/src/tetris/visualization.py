@@ -5,19 +5,25 @@ from dataclasses import dataclass, field
 
 @dataclass
 class TetrisConfiguration:
-    # --- Pygame & UI Constants ---
+    # --- Settable from CLI ---
     cell_size: int = 30
     board_w: int = 10
     board_h: int = 20
     vanish_zone: int = 4
 
-    # UI Layout (Grid Coordinates)
+    # --- Layout constants ---
+    sidebar_cols: int = 5
+    gap_cols: int = 1
+    min_content_rows: int = 14
+    bottom_padding_rows: int = 4
+
+    # --- Computed layout (set in __post_init__) ---
     hold_offset_x: int = 1
     board_offset_x: int = 6
     next_offset_x: int = 17
-
-    screen_width: int = (next_offset_x + 5) * cell_size
-    screen_height: int = (board_h + vanish_zone) * cell_size + 4 * cell_size
+    total_height: int = 24
+    screen_width: int = 660
+    screen_height: int = 840
 
     # Official Tetris Guideline Colors
     colors: dict = field(default_factory=lambda: {
@@ -67,6 +73,16 @@ class TetrisConfiguration:
         PieceEnum.T: [(1, 0), (0, 1), (1, 1), (2, 1)],
         PieceEnum.O: [(1, 0), (2, 0), (1, 1), (2, 1)],
     })
+
+    def __post_init__(self):
+        self.hold_offset_x = 1
+        self.board_offset_x = self.sidebar_cols + self.gap_cols
+        self.next_offset_x = self.board_offset_x + self.board_w + self.gap_cols
+        self.screen_width = (self.next_offset_x + self.sidebar_cols) * self.cell_size
+
+        content_rows = max(self.board_h + self.vanish_zone, self.min_content_rows)
+        self.total_height = content_rows
+        self.screen_height = content_rows * self.cell_size + self.bottom_padding_rows * self.cell_size
 
 
 def draw_cell(CONFIG: TetrisConfiguration, surface, x, y, color):
