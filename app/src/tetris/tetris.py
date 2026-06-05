@@ -222,7 +222,7 @@ class Board:
             flat_ints.extend([0] * (max_size - len(flat_ints)))
 
         c_matrix = np.array(flat_ints, dtype=int).reshape((self.visible_height, self.width))
-        c_matrix = c_matrix[::-1]
+        # c_matrix = c_matrix[::-1]
 
         powers_of_2 = (1 << np.arange(self.width, dtype=np.uint32))
         self.b_rows[:self.visible_height] = (c_matrix > 0).dot(powers_of_2).astype(np.uint32)
@@ -381,15 +381,19 @@ class Board:
         piece.y = ghost_y
         return drop_distance
     
-    def print_board(self, active_piece=None, include_vanish_zone=False):
+    def print_board(self, b_board=None, c_board=None, active_piece=None, include_vanish_zone=False):
         row_count = self.height if include_vanish_zone else self.visible_height
+        if b_board is None:
+            b_board = self.b_rows
+        if c_board is None and self.color_map:
+            c_board = self.c_rows
 
         if self.color_map:
-            for y in range(row_count):
+            for y in reversed(range(row_count)):
                 line = ''
                 for x in range(self.width):
-                    if self.b_rows[y] & (1 << x):
-                        line += PieceEnum(self.c_rows[y, x]).name
+                    if b_board[y] & (1 << x):
+                        line += PieceEnum(c_board[y, x]).name
                     else:
                         from_active = False
                         if active_piece:
@@ -400,7 +404,7 @@ class Board:
                         line += active_piece.type.name if from_active else '.'
                 print(line)
         else:
-            render_rows = self.b_rows.copy() if include_vanish_zone else self.b_rows[:self.visible_height].copy()
+            render_rows = b_board.copy() if include_vanish_zone else b_board[:self.visible_height].copy()
 
             if active_piece is not None:
                 for local_y, row_mask in enumerate(active_piece.current_mask):
@@ -411,7 +415,7 @@ class Board:
                         shifted = row_mask << active_piece.x if active_piece.x >= 0 else row_mask >> abs(active_piece.x)
                         render_rows[by] |= shifted
 
-            for row in render_rows:
+            for row in reversed(render_rows):
                 line = ''.join('X' if row & (1 << i) else '.' for i in range(self.width))
                 print(line)
 
@@ -522,7 +526,7 @@ class Tetris:
 
     def print_state(self, include_vanish_zone=False):
         print("Current Board:")
-        self.board.print_board(self.active_piece, include_vanish_zone=include_vanish_zone)
+        self.board.print_board(active_piece=self.active_piece, include_vanish_zone=include_vanish_zone)
         print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
         print(f"Next Piece: {self.queue.peek_piece().name}")
         print(f"Hold Piece: {self.hold_piece.name if self.hold_piece else 'None'}")
