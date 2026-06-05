@@ -1,7 +1,7 @@
 import pygame
 import sys
 
-from src.tetris import Tetris, PieceEnum, ActionEnum, draw_cell, draw_ui_piece, TetrisConfiguration
+from src.tetris import Tetris, PieceEnum, ActionEnum, draw_cell, draw_ui_piece, draw_text, TetrisConfiguration
 
 def play_tetris_game():
     CONFIG = TetrisConfiguration()  # Use dataclass for constants and config
@@ -17,14 +17,36 @@ def play_tetris_game():
     GRAVITY_EVENT = pygame.USEREVENT + 1
     pygame.time.set_timer(GRAVITY_EVENT, 1000) # 1 block per second at Level 1
 
+    # DAS/ARR state: key_code -> (last_action_time, das_started)
+    das_state = {}
+    das_actions = {}
+    for k, v in CONFIG.KEYS.items():
+        if v == "LEFT":
+            das_actions[k] = lambda piece: game.board.move_piece_left(piece)
+        elif v == "RIGHT":
+            das_actions[k] = lambda piece: game.board.move_piece_right(piece)
+        elif v == "SOFT_DROP":
+            das_actions[k] = lambda piece: game.board.move_piece_down(piece)
+
     running = True
     while running:
+        now = pygame.time.get_ticks()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             
             # --- Input Handling ---
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_p:
+                    game = Tetris(width=CONFIG.BOARD_W, height=CONFIG.BOARD_H, color_map=True)
+                    das_state.clear()
+                    continue
+
+                if event.key == pygame.K_q:
+                    running = False
+                    continue
+
                 action_name = CONFIG.KEYS.get(event.key)
                 if action_name is None:
                     pass
@@ -33,10 +55,34 @@ def play_tetris_game():
                 else:
                     game.move_active_piece(ActionEnum[action_name])
 
+                if event.key in das_actions:
+                    das_state[event.key] = (now, False)
+
+            elif event.type == pygame.KEYUP:
+                das_state.pop(event.key, None)
+
             # --- Gravity ---
             elif event.type == GRAVITY_EVENT:
                 # If it hits the floor/stack during gravity, let it sit (lock delay mechanics normally apply here)
                 game.board.move_piece_down(game.active_piece)
+
+        # --- DAS/ARR Auto-Repeat ---
+        for key in list(das_state.keys()):
+            last_time, das_started = das_state[key]
+            elapsed = now - last_time
+
+            if not das_started:
+                if elapsed < CONFIG.DAS_DELAY:
+                    continue
+                das_state[key] = (now, True)
+                das_actions[key](game.active_piece)
+                continue
+
+            if elapsed < CONFIG.ARR_RATE:
+                continue
+
+            das_state[key] = (now, True)
+            das_actions[key](game.active_piece)
 
         # --- Rendering ---
         screen.fill(CONFIG.BG_COLOR)
@@ -100,12 +146,28 @@ def play_tetris_game():
         hold_piece = game.get_swap_piece()
         draw_ui_piece(CONFIG, screen, hold_piece, CONFIG.HOLD_OFFSET_X, 1, disabled=not game.can_hold)
 
-        # 5. Draw Next Queue (Next 5 pieces)
+        # 5. Draw Stats (Level, Lines, Combo) under hold piece
+        ss = game.score_system
+        if ss.combo < 0:
+            combo_str = "---"
+        elif ss.combo == 0:
+            combo_str = "x1"
+        else:
+            combo_str = f"x{ss.combo + 1}"
+        draw_text(CONFIG, screen, f"Level {ss.level}", CONFIG.HOLD_OFFSET_X, 5)
+        draw_text(CONFIG, screen, f"Lines {ss.lines_cleared_total}", CONFIG.HOLD_OFFSET_X, 6)
+        draw_text(CONFIG, screen, f"Combo {combo_str}", CONFIG.HOLD_OFFSET_X, 7)
+        draw_text(CONFIG, screen, f"B2B active {'ON' if ss.b2b_active else 'OFF'}", CONFIG.HOLD_OFFSET_X, 8)
+
+        # 6. Draw Next Queue (Next 5 pieces)
         next_pieces = game.get_next_pieces()[:5] # Returns list of string names
         for i, piece_name in enumerate(next_pieces):
             piece_type = PieceEnum[piece_name]
             # Space them out vertically by 3 cells
             draw_ui_piece(CONFIG, screen, piece_type, CONFIG.NEXT_OFFSET_X, 1 + (i * 3))
+
+        # 7. Draw Score under next pieces
+        draw_text(CONFIG, screen, f"Score {ss.score}", CONFIG.NEXT_OFFSET_X, 16)
 
         pygame.display.flip()
         clock.tick(60)
