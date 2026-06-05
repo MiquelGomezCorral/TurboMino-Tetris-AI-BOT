@@ -37,6 +37,7 @@ class TetrisConfiguration:
 
     FONT_SIZE = 16
     TEXT_COLOR = (200, 200, 200)
+    GAME_OVER_COLOR = (255, 60, 60)
 
     DAS_DELAY = 167  # ms before auto-repeat starts
     ARR_RATE = 33    # ms between auto-repeat moves
@@ -81,10 +82,11 @@ def draw_ui_piece(CONFIG: TetrisConfiguration, surface, piece_type, offset_x, of
     for dx, dy in shape:
         draw_cell(CONFIG, surface, offset_x + dx, offset_y + dy, color)
 
-def draw_text(CONFIG: TetrisConfiguration, surface, text: str, cell_x: int, cell_y: int, font_size: int = None):
+def draw_text(CONFIG: TetrisConfiguration, surface, text: str, cell_x: int, cell_y: int, font_size: int = None, color: tuple = None):
     font_size = font_size or CONFIG.FONT_SIZE
     font = pygame.font.Font(None, font_size)
-    label = font.render(text, True, CONFIG.TEXT_COLOR)
+    c = color or CONFIG.TEXT_COLOR
+    label = font.render(text, True, c)
     px = cell_x * CONFIG.CELL_SIZE
     py = cell_y * CONFIG.CELL_SIZE
     surface.blit(label, (px, py))

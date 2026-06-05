@@ -47,6 +47,9 @@ def play_tetris_game():
                     running = False
                     continue
 
+                if game.game_over:
+                    continue
+
                 action_name = CONFIG.KEYS.get(event.key)
                 if action_name is None:
                     pass
@@ -63,26 +66,27 @@ def play_tetris_game():
 
             # --- Gravity ---
             elif event.type == GRAVITY_EVENT:
-                # If it hits the floor/stack during gravity, let it sit (lock delay mechanics normally apply here)
-                game.board.move_piece_down(game.active_piece)
+                if not game.game_over:
+                    game.board.move_piece_down(game.active_piece)
 
         # --- DAS/ARR Auto-Repeat ---
-        for key in list(das_state.keys()):
-            last_time, das_started = das_state[key]
-            elapsed = now - last_time
+        if not game.game_over:
+            for key in list(das_state.keys()):
+                last_time, das_started = das_state[key]
+                elapsed = now - last_time
 
-            if not das_started:
-                if elapsed < CONFIG.DAS_DELAY:
+                if not das_started:
+                    if elapsed < CONFIG.DAS_DELAY:
+                        continue
+                    das_state[key] = (now, True)
+                    das_actions[key](game.active_piece)
                     continue
+
+                if elapsed < CONFIG.ARR_RATE:
+                    continue
+
                 das_state[key] = (now, True)
                 das_actions[key](game.active_piece)
-                continue
-
-            if elapsed < CONFIG.ARR_RATE:
-                continue
-
-            das_state[key] = (now, True)
-            das_actions[key](game.active_piece)
 
         # --- Rendering ---
         screen.fill(CONFIG.BG_COLOR)
@@ -168,6 +172,11 @@ def play_tetris_game():
 
         # 7. Draw Score under next pieces
         draw_text(CONFIG, screen, f"Score {ss.score}", CONFIG.NEXT_OFFSET_X, 16)
+
+        # 8. Game Over overlay
+        if game.game_over:
+            draw_text(CONFIG, screen, "GAME OVER", CONFIG.BOARD_OFFSET_X + 2, total_h + 1, font_size=50, color=CONFIG.GAME_OVER_COLOR)
+            draw_text(CONFIG, screen, "Press R to restart", CONFIG.BOARD_OFFSET_X + 2.5, total_h + 2.5, font_size=30, color=CONFIG.GAME_OVER_COLOR)
 
         pygame.display.flip()
         clock.tick(60)

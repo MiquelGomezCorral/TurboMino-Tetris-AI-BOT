@@ -417,6 +417,14 @@ class Tetris:
     hold_piece: PieceEnum | None
     queue: Queue
     board: Board
+    can_hold: bool
+    score_system: ScoringSystem
+    last_action_was_rotation: bool
+    last_kick_index: int
+
+    game_over: bool
+
+
     def __init__(
         self, 
         width: int = 10, height: int = 20, vanish_zone: int = 4, 
@@ -439,9 +447,11 @@ class Tetris:
         self.score_system = ScoringSystem()
         self.last_action_was_rotation = False
         self.last_kick_index = -1
+        self.game_over = False
 
     def spawn_piece(self):
         self.active_piece.reset_piece(self.queue.pop_piece())
+        self.game_over = self.board.check_collision(self.active_piece.current_mask, self.active_piece.x, self.active_piece.y)
 
     def move_active_piece(self, action: ActionEnum):
         cleared_lines = 0
