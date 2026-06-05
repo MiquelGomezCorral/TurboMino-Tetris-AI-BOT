@@ -313,7 +313,15 @@ class Board:
         return -1
 
     def check_t_spin(self, piece: ActivePiece, last_action_was_rotation: bool, last_kick_index: int) -> SpinType:
-        if piece.type != PieceEnum.T or not last_action_was_rotation:
+        if piece.type != PieceEnum.T:
+            return SpinType.NONE
+
+        can_move_left = not self.check_collision(piece.current_mask, piece.x - 1, piece.y)
+        can_move_right = not self.check_collision(piece.current_mask, piece.x + 1, piece.y)
+        can_move_down = not self.check_collision(piece.current_mask, piece.x, piece.y - 1)
+        immobile = not (can_move_left or can_move_right or can_move_down)
+
+        if not immobile and not last_action_was_rotation:
             return SpinType.NONE
 
         corners = [(0, 0), (2, 0), (0, 2), (2, 2)]

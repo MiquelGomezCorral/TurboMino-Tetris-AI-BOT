@@ -162,6 +162,7 @@ def play_tetris_game():
         draw_text(CONFIG, screen, f"Lines {ss.lines_cleared_total}", CONFIG.HOLD_OFFSET_X, 6)
         draw_text(CONFIG, screen, f"Combo {combo_str}", CONFIG.HOLD_OFFSET_X, 7)
         draw_text(CONFIG, screen, f"B2B active {'ON' if ss.b2b_active else 'OFF'}", CONFIG.HOLD_OFFSET_X, 8)
+        draw_text(CONFIG, screen, f'Move: {ss.last_move_name if ss.last_move_name else "---"}', CONFIG.HOLD_OFFSET_X, 9)
 
         # 6. Draw Next Queue (Next 5 pieces)
         next_pieces = game.get_next_pieces()[:5] # Returns list of string names
