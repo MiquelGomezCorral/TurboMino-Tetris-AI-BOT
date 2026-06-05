@@ -45,14 +45,16 @@ class TetrisConfiguration:
 
     # Keyboard bindings (pygame key constants -> ActionEnum names)
     keys: dict = field(default_factory=lambda: {
-        pygame.K_a:     "LEFT",
-        pygame.K_s:     "RIGHT",
-        pygame.K_DOWN:  "SOFT_DROP",
-        pygame.K_LEFT:  "ROTATE_CCW",
-        pygame.K_RIGHT: "ROTATE_CW",
-        pygame.K_UP:    "ROTATE_180",
-        pygame.K_SPACE: "DROP",
-        pygame.K_w:     "HOLD",
+        "LEFT": pygame.K_a,
+        "RIGHT": pygame.K_s,
+        "SOFT_DROP": pygame.K_r,
+        "ROTATE_CCW": pygame.K_LEFT,
+        "ROTATE_CW": pygame.K_RIGHT,
+        "ROTATE_180": pygame.K_UP,
+        "DROP": pygame.K_SPACE,
+        "HOLD": pygame.K_w,
+        "RESET": pygame.K_p,
+        "QUIT": pygame.K_q,
     })
 
     # Mini-shapes for UI drawing (Hold / Next Queue)

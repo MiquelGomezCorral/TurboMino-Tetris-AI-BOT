@@ -105,15 +105,6 @@ class ActivePiece:
         PieceEnum.T: [[0,0,0], [1,1,1], [0,1,0]],
         PieceEnum.O: [[1,1], [1,1]],
     }
-    _SPAWN_POSITIONS = {
-        PieceEnum.I: (3, 20),
-        PieceEnum.O: (4, 20),
-        PieceEnum.T: (3, 20),
-        PieceEnum.J: (3, 20),
-        PieceEnum.L: (3, 20),
-        PieceEnum.S: (3, 20),
-        PieceEnum.Z: (3, 20),
-    }
 
     PRECOMPUTED_MASKS = {}
     for p_type, base in _BASE_SHAPES.items():
@@ -125,7 +116,9 @@ class ActivePiece:
             rotations.append(row_ints)
         PRECOMPUTED_MASKS[p_type] = rotations
 
-    def __init__(self, piece_type: PieceEnum):
+    def __init__(self, piece_type: PieceEnum, width: int = 10, height: int = 20):
+        self.width = width
+        self.height = height
         self.type = piece_type
         self.reset_piece(piece_type)
         # 3. Instant O(1) lookup. No computation during the game loop.
@@ -139,7 +132,11 @@ class ActivePiece:
         self.type = piece_type
         self.rotation_state = RotationEnum.SPAWN
         self.masks = self.PRECOMPUTED_MASKS[piece_type]
-        self.x, self.y = self._SPAWN_POSITIONS[piece_type]
+
+        piece_size = len(self._BASE_SHAPES[piece_type][0])
+        
+        self.x = (self.width - piece_size) // 2
+        self.y = self.height # it goes up one
 
     def move_left(self):
         self.x -= 1
@@ -188,6 +185,14 @@ class Board:
         (RotationEnum.LEFT,    RotationEnum.RIGHT):    [(0, 0), (-1, 0), (-1, -2), (-1, -1), (0, -2), (0, -1)]
     }
 
+    FRONT_CORNERS_MAP = {
+        RotationEnum.SPAWN:   [(0, 2), (2, 2)],
+        RotationEnum.RIGHT:   [(0, 0), (0, 2)],
+        RotationEnum.REVERSE: [(0, 0), (2, 0)],
+        RotationEnum.LEFT:    [(2, 0), (2, 2)],
+    }
+
+    CORNERS = [(0, 0), (2, 0), (0, 2), (2, 2)]
 
     def __init__(self, width: int = 10, height: int = 20, vanish_zone: int = 4, color_map: bool = False, playfield: str = None):
         assert width > 0 and height > 0, "Width and height must be positive integers."
@@ -324,19 +329,11 @@ class Board:
         if not immobile and not last_action_was_rotation:
             return SpinType.NONE
 
-        corners = [(0, 0), (2, 0), (0, 2), (2, 2)]
+        front_corners = self.FRONT_CORNERS_MAP[piece.rotation_state]
         filled_corners = 0
-
-        front_corners_map = {
-            RotationEnum.SPAWN:   [(0, 2), (2, 2)],
-            RotationEnum.RIGHT:   [(0, 0), (0, 2)],
-            RotationEnum.REVERSE: [(0, 0), (2, 0)],
-            RotationEnum.LEFT:    [(2, 0), (2, 2)],
-        }
-        front_corners = front_corners_map[piece.rotation_state]
         front_filled = 0
 
-        for cx, cy in corners:
+        for cx, cy in self.CORNERS:
             bx, by = piece.x + cx, piece.y + cy
             if bx < 0 or bx >= self.width or by < 0 or by >= self.height:
                 is_filled = True
@@ -442,13 +439,15 @@ class Tetris:
         active_piece: str = None,
         hold_piece: str = None,
     ):
+        self.width = width
+        self.height = height
         self.board = Board(width, height, vanish_zone, color_map, playfield)
         self.queue = Queue(next_pieces)
 
         if active_piece:
-            self.active_piece = ActivePiece(PieceEnum[active_piece])
+            self.active_piece = ActivePiece(PieceEnum[active_piece], self.width, self.height)
         else:
-            self.active_piece = ActivePiece(self.queue.pop_piece())
+            self.active_piece = ActivePiece(self.queue.pop_piece(), self.width, self.height)
         
         self.hold_piece = PieceEnum[hold_piece] if hold_piece else None
         self.can_hold = True

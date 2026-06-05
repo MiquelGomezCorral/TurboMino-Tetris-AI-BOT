@@ -19,13 +19,14 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
     # DAS/ARR state: key_code -> (last_action_time, das_started)
     das_state = {}
     das_actions = {}
-    for k, v in CONFIG.keys.items():
-        if v == "LEFT":
-            das_actions[k] = lambda piece: game.board.move_piece_left(piece)
-        elif v == "RIGHT":
-            das_actions[k] = lambda piece: game.board.move_piece_right(piece)
-        elif v == "SOFT_DROP":
-            das_actions[k] = lambda piece: game.board.move_piece_down(piece)
+    action_by_key = {v: k for k, v in CONFIG.keys.items()}
+    for action_name, key_code in CONFIG.keys.items():
+        if action_name == "LEFT":
+            das_actions[key_code] = lambda piece: game.board.move_piece_left(piece)
+        elif action_name == "RIGHT":
+            das_actions[key_code] = lambda piece: game.board.move_piece_right(piece)
+        elif action_name == "SOFT_DROP":
+            das_actions[key_code] = lambda piece: game.board.move_piece_down(piece)
 
     running = True
     while running:
@@ -37,19 +38,19 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
             
             # --- Input Handling ---
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:
+                if event.key == CONFIG.keys.get("RESET"):
                     game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, color_map=True)
                     das_state.clear()
                     continue
 
-                if event.key == pygame.K_q:
+                if event.key == CONFIG.keys.get("QUIT"):
                     running = False
                     continue
 
                 if game.game_over:
                     continue
 
-                action_name = CONFIG.keys.get(event.key)
+                action_name = action_by_key.get(event.key)
                 if action_name is None:
                     pass
                 elif action_name == "SOFT_DROP":
