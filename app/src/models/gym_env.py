@@ -2,7 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-from src.tetris import Tetris, MoveSearcher, TetrisConfiguration
+from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, PieceEnum
 from src.config import Configuration
 
 class TetrisEnv(gym.Env):
@@ -17,9 +17,15 @@ class TetrisEnv(gym.Env):
         
         # 2. Observation Space: Example using a flattened 10x20 binary grid
         # Shape is (50, 200). Each row is a potential future board state.
+        self.board_features = CONFIG.board_w *  (self.CONFIG.board_h + self.T_CONFIG.vanish_zone)
+        self.num_piece_categories = len(PieceEnum) # 9
+        self.context_features = T_CONFIG.max_pieces_in_view * self.num_piece_categories # 63
+        
+        self.total_features = self.board_features + self.context_features
+
         self.observation_space = spaces.Box(
             low=0.0, high=1.0, 
-            shape=(CONFIG.max_placements, CONFIG.board_w * CONFIG.board_h), 
+            shape=(CONFIG.max_placements, self.total_features), 
             dtype=np.float32
         )
         
@@ -56,24 +62,45 @@ class TetrisEnv(gym.Env):
         
         obs = self._get_obs()
         return obs, {}
+
+    def _get_one_hot(self, piece_val):
+            arr = np.zeros(self.num_piece_categories, dtype=np.float32)
+            arr[piece_val] = 1.0
+            return arr
     
     def _get_obs(self):
         # 1. Ask the MoveSearcher for all valid placements this turn
         self.current_placements = self.searcher.get_all_placements(self.game.active_piece.type)
+    
+        context_list = []
+
+        # A. Current Piece
+        context_list.extend(self._get_one_hot(self.game.active_piece.type.value))
         
-        # 2. Prepare the padded observation matrix
-        obs = np.zeros((
-            self.CONFIG.max_placements, 
-            self.CONFIG.board_w * (self.CONFIG.board_h + self.T_CONFIG.vanish_zone)
-        ), dtype=np.float32)
+        # B. Hold Piece (Default to 0 / N if None)
+        hold_val = self.game.hold_piece.value if self.game.hold_piece else PieceEnum.N.value
+        context_list.extend(self._get_one_hot(hold_val))
+        
+        # C. Next Pieces
+        queue_list = list(self.game.queue.pieces)
+        for i in range(self.T_CONFIG.max_pieces_on_queue_view): 
+            next_val = queue_list[i].value if i < len(queue_list) else PieceEnum.N.value
+            context_list.extend(self._get_one_hot(next_val))
+
+            
+        context_vector = np.array(context_list, dtype=np.float32) # Length 63
+
+        # 2. Build the Observation Matrix
+        obs = np.zeros((self.CONFIG.max_placements, self.total_features), dtype=np.float32)
         
         for i, placement in enumerate(self.current_placements):
             if i >= self.CONFIG.max_placements:
-                break # Hard safety bound
+                break 
             
-            # Convert the uint32 bitboard back to a flat float32 array of 0s and 1s
-            # Alternatively, extract heuristics here (heights, holes, bumpiness)
-            obs[i] = self._extract_features(placement['bitmap'])
+            flat_board = self._extract_features(placement['bitmap'])
+            
+            # 3. Concatenate the board state with the piece context
+            obs[i] = np.concatenate((flat_board, context_vector))
             
         return obs
 
