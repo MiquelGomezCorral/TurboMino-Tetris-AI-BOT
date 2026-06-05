@@ -12,7 +12,6 @@ from scripts import play_tetris_game
 def cmd_play_tetris(args: argparse.Namespace):
     """Call play_tetris_from_config_list with the given args."""
     CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
-    print(CONFIG.board_w, CONFIG.board_h)
     print_separator("START ...", sep_type="START")
     play_tetris_game(CONFIG)
     print_separator("END ...", sep_type="START")
