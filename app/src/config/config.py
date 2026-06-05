@@ -28,14 +28,14 @@ class Configuration:
 
     exp_name: str = "base_name"
     seed:     int = 42
-
-    max_placements: int = 50
-    board_w: int = 10
-    board_h: int = 20
-
-
     gym_id:          str = None
     total_timesteps: int = 25_000
+
+    max_placements: int = 50
+    features_dim: int = 128
+    max_board_size_w: int = 10
+    max_board_size_h: int = 20
+
 
     def __post_init__(self):
         # Basic setup: create folders and load yaml config if provided
