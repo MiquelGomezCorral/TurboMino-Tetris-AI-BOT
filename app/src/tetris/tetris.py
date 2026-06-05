@@ -155,6 +155,26 @@ class ActivePiece:
         self.x = x
         self.y = y
     
+
+def _clear_bitmap(b_rows, width, visible_height, c_rows=None):
+    FULL = (1 << width) - 1
+    visible_slice = b_rows[:visible_height]
+    full_mask = visible_slice == FULL
+    cleared = int(np.sum(full_mask))
+    if cleared == 0:
+        return (b_rows, c_rows, 0) if c_rows is not None else (b_rows, 0)
+    kept = visible_slice[~full_mask]
+    cleared_b = b_rows.copy()
+    cleared_b[:visible_height] = np.concatenate((kept, np.zeros(cleared, dtype=np.uint32)))
+    if c_rows is not None:
+        visible_c = c_rows[:visible_height]
+        kept_c = visible_c[~full_mask]
+        cleared_c = c_rows.copy()
+        cleared_c[:visible_height] = np.vstack((kept_c, np.zeros((cleared, width), dtype=int)))
+        return cleared_b, cleared_c, cleared
+    return cleared_b, cleared
+
+
 class Board:
     SRS_OFFSETS_STANDARD = {
         (RotationEnum.SPAWN,   RotationEnum.RIGHT):   [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
@@ -273,21 +293,15 @@ class Board:
                         self.c_rows[by, bx] = piece.type.value
 
     def _clear_lines(self) -> int:
-        FULL = (1 << self.width) - 1
-
-        visible_b = self.b_rows[:self.visible_height]
-        full_mask = visible_b == FULL
-        cleared = int(np.sum(full_mask))
-
-        if cleared > 0:
-            kept_b = visible_b[~full_mask]
-            self.b_rows[:self.visible_height] = np.concatenate((kept_b, np.zeros(cleared, dtype=np.uint32)))
-
-            if self.color_map:
-                visible_c = self.c_rows[:self.visible_height]
-                kept_c = visible_c[~full_mask]
-                self.c_rows[:self.visible_height] = np.vstack((kept_c, np.zeros((cleared, self.width), dtype=int)))
-
+        if self.color_map:
+            cleared_b, cleared_c, cleared = _clear_bitmap(
+                self.b_rows, self.width, self.visible_height, self.c_rows)
+            self.b_rows[:self.visible_height] = cleared_b[:self.visible_height]
+            self.c_rows[:self.visible_height] = cleared_c[:self.visible_height]
+        else:
+            cleared_b, cleared = _clear_bitmap(
+                self.b_rows, self.width, self.visible_height)
+            self.b_rows[:self.visible_height] = cleared_b[:self.visible_height]
         return cleared
 
     def lock_piece(self, piece: ActivePiece) -> int:

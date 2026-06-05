@@ -1,17 +1,20 @@
 from collections import deque
-from .tetris import ActionEnum, Board, ActivePiece, PieceEnum, RotationEnum
+import numpy as np
+from .tetris import ActionEnum, Board, ActivePiece, PieceEnum, RotationEnum, _clear_bitmap
+
 
 class MoveSearcher:
     def __init__(self, board: Board):
         self.board = board
 
-    def get_all_placements(self, piece_type: PieceEnum) -> list[dict]:
+    def get_all_placements(self, piece_type: PieceEnum, clear_lines: bool = False) -> list[dict]:
         """
         Finds all valid unique piece placement lock positions.
         Returns a list of dictionaries containing:
           - 'state': (x, y, rotation_value)
           - 'sequence': list of ActionEnum actions taken from spawn to lock
           - 'bitmap': a 1D uint32 numpy array representing the new board state
+          - 'lines_cleared': int (only when clear_lines=True)
         """
         # 1. Initialize piece at spawn to find starting parameters
         spawn_piece = ActivePiece(piece_type, self.board.width, self.board.visible_height)
@@ -47,10 +50,16 @@ class MoveSearcher:
                             new_b_rows[by] |= shifted_mask
 
                     # Store using the footprint as the deduplication key
+                    if clear_lines:
+                        new_b_rows, lines_cleared = _clear_bitmap(new_b_rows, self.board.width, self.board.visible_height)
+                    else:
+                        lines_cleared = 0
+
                     placements[footprint] = {
                         'state': (x, y, rot_val),
                         'sequence': list(path) + [ActionEnum.DROP],
-                        'bitmap': new_b_rows
+                        'bitmap': new_b_rows,
+                        'lines_cleared': lines_cleared,
                     }
             else:
                 # Gravity: If it can move down, it must fall (Standard Guideline handling)
