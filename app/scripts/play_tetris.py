@@ -3,15 +3,14 @@ import sys
 
 from src.tetris import Tetris, PieceEnum, ActionEnum, draw_cell, draw_ui_piece, draw_text, TetrisConfiguration
 
-def play_tetris_game():
-    CONFIG = TetrisConfiguration()  # Use dataclass for constants and config
+def play_tetris_game(CONFIG: TetrisConfiguration):
     pygame.init()
-    screen = pygame.display.set_mode((CONFIG.SCREEN_WIDTH, CONFIG.SCREEN_HEIGHT))
+    screen = pygame.display.set_mode((CONFIG.screen_width, CONFIG.screen_height))
     pygame.display.set_caption("Tetris Engine")
     clock = pygame.time.Clock()
 
     # Initialize Engine (Must use color_map=True to render official colors)
-    game = Tetris(width=CONFIG.BOARD_W, height=CONFIG.BOARD_H, color_map=True)
+    game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, color_map=True)
 
     # Gravity Timer
     GRAVITY_EVENT = pygame.USEREVENT + 1
@@ -20,7 +19,7 @@ def play_tetris_game():
     # DAS/ARR state: key_code -> (last_action_time, das_started)
     das_state = {}
     das_actions = {}
-    for k, v in CONFIG.KEYS.items():
+    for k, v in CONFIG.keys.items():
         if v == "LEFT":
             das_actions[k] = lambda piece: game.board.move_piece_left(piece)
         elif v == "RIGHT":
@@ -39,7 +38,7 @@ def play_tetris_game():
             # --- Input Handling ---
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:
-                    game = Tetris(width=CONFIG.BOARD_W, height=CONFIG.BOARD_H, color_map=True)
+                    game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, color_map=True)
                     das_state.clear()
                     continue
 
@@ -50,7 +49,7 @@ def play_tetris_game():
                 if game.game_over:
                     continue
 
-                action_name = CONFIG.KEYS.get(event.key)
+                action_name = CONFIG.keys.get(event.key)
                 if action_name is None:
                     pass
                 elif action_name == "SOFT_DROP":
@@ -76,31 +75,31 @@ def play_tetris_game():
                 elapsed = now - last_time
 
                 if not das_started:
-                    if elapsed < CONFIG.DAS_DELAY:
+                    if elapsed < CONFIG.das_delay:
                         continue
                     das_state[key] = (now, True)
                     das_actions[key](game.active_piece)
                     continue
 
-                if elapsed < CONFIG.ARR_RATE:
+                if elapsed < CONFIG.arr_rate:
                     continue
 
                 das_state[key] = (now, True)
                 das_actions[key](game.active_piece)
 
         # --- Rendering ---
-        screen.fill(CONFIG.BG_COLOR)
+        screen.fill(CONFIG.bg_color)
 
         total_h = game.board.height      # 24 (visible 20 + vanish 4)
         vis_h = game.board.visible_height
 
         # 1. Draw Vanish Zone Background
         vz_rect = pygame.Rect(
-            CONFIG.BOARD_OFFSET_X * CONFIG.CELL_SIZE, 0,
-            CONFIG.BOARD_W * CONFIG.CELL_SIZE,
-            (total_h - vis_h) * CONFIG.CELL_SIZE
+            CONFIG.board_offset_x * CONFIG.cell_size, 0,
+            CONFIG.board_w * CONFIG.cell_size,
+            (total_h - vis_h) * CONFIG.cell_size
         )
-        pygame.draw.rect(screen, CONFIG.VZ_COLOR, vz_rect)
+        pygame.draw.rect(screen, CONFIG.vz_color, vz_rect)
 
         # 2. Draw Board Stack & Grid (y=0..total_h-1)
         for y in range(total_h):
@@ -109,19 +108,19 @@ def play_tetris_game():
                 color_val = game.board.c_rows[y, x]
                 if color_val != 0:
                     piece_enum = PieceEnum(color_val)
-                    draw_cell(CONFIG, screen, CONFIG.BOARD_OFFSET_X + x, screen_y, CONFIG.COLORS[piece_enum])
+                    draw_cell(CONFIG, screen, CONFIG.board_offset_x + x, screen_y, CONFIG.colors[piece_enum])
                 elif y < vis_h:
                     # Empty cell in visible area → draw grid border
                     rect = pygame.Rect(
-                        (CONFIG.BOARD_OFFSET_X + x) * CONFIG.CELL_SIZE,
-                        screen_y * CONFIG.CELL_SIZE,
-                        CONFIG.CELL_SIZE, CONFIG.CELL_SIZE
+                        (CONFIG.board_offset_x + x) * CONFIG.cell_size,
+                        screen_y * CONFIG.cell_size,
+                        CONFIG.cell_size, CONFIG.cell_size
                     )
-                    pygame.draw.rect(screen, CONFIG.GRID_COLOR, rect, 1)
+                    pygame.draw.rect(screen, CONFIG.grid_color, rect, 1)
 
         # 3. Draw Active Piece (all rows, including vanish zone)
         active = game.active_piece
-        color = CONFIG.COLORS[active.type]
+        color = CONFIG.colors[active.type]
         for local_y, row_mask in enumerate(active.current_mask):
             if row_mask == 0: continue
             by = active.y + local_y
@@ -130,7 +129,7 @@ def play_tetris_game():
                 for local_x in range(4):
                     if row_mask & (1 << local_x):
                         bx = active.x + local_x
-                        draw_cell(CONFIG, screen, CONFIG.BOARD_OFFSET_X + bx, screen_y, color)
+                        draw_cell(CONFIG, screen, CONFIG.board_offset_x + bx, screen_y, color)
 
         # 4. Draw Ghost Piece (all rows, including vanish zone)
         ghost_y = game.board.get_ghost_y(active)
@@ -143,12 +142,12 @@ def play_tetris_game():
                 for local_x in range(4):
                     if row_mask & (1 << local_x):
                         bx = active.x + local_x
-                        rect = pygame.Rect((CONFIG.BOARD_OFFSET_X + bx) * CONFIG.CELL_SIZE, screen_y * CONFIG.CELL_SIZE, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE)
+                        rect = pygame.Rect((CONFIG.board_offset_x + bx) * CONFIG.cell_size, screen_y * CONFIG.cell_size, CONFIG.cell_size, CONFIG.cell_size)
                         pygame.draw.rect(screen, ghost_color, rect, 2)
 
         # 4. Draw Hold Piece
         hold_piece = game.get_swap_piece()
-        draw_ui_piece(CONFIG, screen, hold_piece, CONFIG.HOLD_OFFSET_X, 1, disabled=not game.can_hold)
+        draw_ui_piece(CONFIG, screen, hold_piece, CONFIG.hold_offset_x, 1, disabled=not game.can_hold)
 
         # 5. Draw Stats (Level, Lines, Combo) under hold piece
         ss = game.score_system
@@ -158,26 +157,26 @@ def play_tetris_game():
             combo_str = "x1"
         else:
             combo_str = f"x{ss.combo + 1}"
-        draw_text(CONFIG, screen, f"Level {ss.level}", CONFIG.HOLD_OFFSET_X, 5)
-        draw_text(CONFIG, screen, f"Lines {ss.lines_cleared_total}", CONFIG.HOLD_OFFSET_X, 6)
-        draw_text(CONFIG, screen, f"Combo {combo_str}", CONFIG.HOLD_OFFSET_X, 7)
-        draw_text(CONFIG, screen, f"B2B active {'ON' if ss.b2b_active else 'OFF'}", CONFIG.HOLD_OFFSET_X, 8)
-        draw_text(CONFIG, screen, f'Move: {ss.last_move_name if ss.last_move_name else "---"}', CONFIG.HOLD_OFFSET_X, 9)
+        draw_text(CONFIG, screen, f"Level {ss.level}", CONFIG.hold_offset_x, 5)
+        draw_text(CONFIG, screen, f"Lines {ss.lines_cleared_total}", CONFIG.hold_offset_x, 6)
+        draw_text(CONFIG, screen, f"Combo {combo_str}", CONFIG.hold_offset_x, 7)
+        draw_text(CONFIG, screen, f"B2B active {'ON' if ss.b2b_active else 'OFF'}", CONFIG.hold_offset_x, 8)
+        draw_text(CONFIG, screen, f'Move: {ss.last_move_name if ss.last_move_name else "---"}', CONFIG.hold_offset_x, 9)
 
         # 6. Draw Next Queue (Next 5 pieces)
         next_pieces = game.get_next_pieces()[:5] # Returns list of string names
         for i, piece_name in enumerate(next_pieces):
             piece_type = PieceEnum[piece_name]
             # Space them out vertically by 3 cells
-            draw_ui_piece(CONFIG, screen, piece_type, CONFIG.NEXT_OFFSET_X, 1 + (i * 3))
+            draw_ui_piece(CONFIG, screen, piece_type, CONFIG.next_offset_x, 1 + (i * 3))
 
         # 7. Draw Score under next pieces
-        draw_text(CONFIG, screen, f"Score {ss.score}", CONFIG.NEXT_OFFSET_X, 16)
+        draw_text(CONFIG, screen, f"Score {ss.score}", CONFIG.next_offset_x, 16)
 
         # 8. Game Over overlay
         if game.game_over:
-            draw_text(CONFIG, screen, "GAME OVER", CONFIG.BOARD_OFFSET_X + 2, total_h + 1, font_size=50, color=CONFIG.GAME_OVER_COLOR)
-            draw_text(CONFIG, screen, "Press R to restart", CONFIG.BOARD_OFFSET_X + 2.5, total_h + 2.5, font_size=30, color=CONFIG.GAME_OVER_COLOR)
+            draw_text(CONFIG, screen, "GAME OVER", CONFIG.board_offset_x + 2, total_h + 1, font_size=50, color=CONFIG.game_over_color)
+            draw_text(CONFIG, screen, "Press R to restart", CONFIG.board_offset_x + 2.5, total_h + 2.5, font_size=30, color=CONFIG.game_over_color)
 
         pygame.display.flip()
         clock.tick(60)
