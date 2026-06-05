@@ -3,5 +3,5 @@
 Functions to manage, create, train / test models.
 """
 from .gym_env import TetrisEnv
-from .TurboMino import TetrisFeatureExtractor
+from .TurboMino import TurboMino
 from .train import train_ppo

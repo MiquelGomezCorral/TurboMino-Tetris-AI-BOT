@@ -4,7 +4,7 @@ from sb3_contrib.common.wrappers import ActionMasker
 
 from src.config import Configuration
 from src.models.gym_env import TetrisEnv
-from src.models.TurboMino import TetrisFeatureExtractor
+from src.models.TurboMino import TurboMino
 
 import gymnasium as gym
 import numpy as np
@@ -29,7 +29,7 @@ def train_ppo(CONFIG: Configuration):
 
 
     policy_kwargs = dict(
-        features_extractor_class=TetrisFeatureExtractor,
+        features_extractor_class=TurboMino,
         features_extractor_kwargs=dict(
             max_placements=CONFIG.max_placements, 
             features_dim=CONFIG.max_placements * 16

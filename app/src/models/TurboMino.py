@@ -1,6 +1,7 @@
-import torch
-from einops import rearrange, repeat
 import numpy as np
+import torch
+import torch.nn.functional as F
+from einops import rearrange, reduce, repeat
 from torch import nn
 
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -8,98 +9,254 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 
-class TetrisFeatureExtractor(BaseFeaturesExtractor):
-    def __init__(self, T_CONFIG: TetrisConfiguration, CONFIG: Configuration, observation_space):
-        super().__init__(observation_space, CONFIG.features_dim)
-        
-        self.CONFIG = CONFIG
-        self.T_CONFIG = T_CONFIG
-        
-        # --- 1. Board CNN ---
-        self.cnn = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        _, H, W = observation_space["boards"].shape
-        self.cnn_output_dim = 32 * (H // 2) * (W // 2)
-        
-        # --- 2. Sequence Queue Pipeline ---
-        self.d_model = 16 
-        self.piece_embedding = nn.Linear(self.T_CONFIG.num_piece_categories, self.d_model)
-        self.rope = RoPE1D(self.d_model, max_seq_len=self.T_CONFIG.max_pieces_in_view)
-        self.seq_flatten_dim = self.T_CONFIG.max_pieces_in_view * self.d_model
-        
-        # --- 3. Combiner ---
-        self.placement_evaluator = nn.Sequential(
-            nn.Linear(self.cnn_output_dim + self.seq_flatten_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, 16)
-        )
-        
-        self._features_dim = self.CONFIG.max_placements * 16
 
-    def forward(self, observations: dict[str, torch.Tensor]):
-        # SB3 passes a dict of tensors
-        boards = observations["boards"] # Shape: (Batch, M, 20, 10)
-        queue = observations["queue"]   # Shape: (Batch, T_CONFIG.max_pieces_in_view, T_CONFIG.num_piece_categories)
-        
-        B, M, H, W = boards.shape
-        
-        # 1. Process Boards
-        board_img = rearrange(boards, 'b m h w -> (b m) 1 h w')
-        board_features = self.cnn(board_img) # Shape: (B*M, cnn_out)
-        
-        # 2. Process Queue
-        piece_embeds = self.piece_embedding(queue) # Shape: (B, T_CONFIG.max_pieces_in_view, 16)
-        rotated_embeds = self.rope(piece_embeds)   # Shape: (B, T_CONFIG.max_pieces_in_view, 16)
-        queue_features = rearrange(rotated_embeds, 'b seq d -> b (seq d)') # Shape: (B, T_CONFIG.max_pieces_in_view * 16)
-        
-        # 3. Broadcast Queue to match Boards
-        # This duplicates the queue context for each of the M placements instantly
-        queue_expanded = repeat(queue_features, 'b f -> (b m) f', m=M)
-        
-        # 4. Combine and Evaluate
-        combined = torch.cat([board_features, queue_expanded], dim=1)
-        placement_values = self.placement_evaluator(combined) # Shape: (B*M, 16)
-        
-        final_features = rearrange(placement_values, '(b m) out -> b (m out)', b=B, m=M)
-        return board_features, queue_expanded, final_features
-    
 
-    
-class RoPE1D(nn.Module):
-    def __init__(self, d_model: int, max_seq_len: int = 7):
+# ----------------------------------------------------------------------------- #
+#  Attention primitives (self + cross share one implementation)                 #
+# ----------------------------------------------------------------------------- #
+class Attention(nn.Module):
+    """Multi-head attention. Self-attention when `x_kv is None`, else cross."""
+
+    def __init__(self, d_model: int, n_heads: int):
         super().__init__()
-        self.d_model = d_model
-        
-        assert d_model % 2 == 0, "Feature dimension must be even for RoPE."
-        
-        # 's -> s 1' replaces .unsqueeze(1)
-        position = rearrange(torch.arange(max_seq_len), 's -> s 1')
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-np.log(10000.0) / d_model))
-        
-        freqs = position * div_term 
-        
-        self.register_buffer('cos', torch.cos(freqs))
-        self.register_buffer('sin', torch.sin(freqs))
+        assert d_model % n_heads == 0
+        self.n_heads = n_heads
+        self.to_q = nn.Linear(d_model, d_model, bias=False)
+        self.to_k = nn.Linear(d_model, d_model, bias=False)
+        self.to_v = nn.Linear(d_model, d_model, bias=False)
+        self.proj = nn.Linear(d_model, d_model)
 
+    def forward(self, x_q, x_kv=None, key_mask=None):
+        x_kv = x_q if x_kv is None else x_kv
+
+        q = rearrange(self.to_q(x_q), "b n (h d) -> b h n d", h=self.n_heads)
+        k = rearrange(self.to_k(x_kv), "b m (h d) -> b h m d", h=self.n_heads)
+        v = rearrange(self.to_v(x_kv), "b m (h d) -> b h m d", h=self.n_heads)
+
+        # key_mask: (B, M) bool, True = keep. Broadcast to (B, 1, 1, M) for SDPA.
+        attn_mask = rearrange(key_mask, "b m -> b 1 1 m") if key_mask is not None else None
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask)  # flash kernel
+        return self.proj(rearrange(out, "b h n d -> b n (h d)"))
+
+
+class TransformerBlock(nn.Module):
+    """Pre-norm residual block usable for both self- and cross-attention."""
+
+    def __init__(self, d_model: int, n_heads: int, ff_mult: int = 4):
+        super().__init__()
+        self.norm_q = nn.LayerNorm(d_model)
+        self.norm_kv = nn.LayerNorm(d_model)
+        self.attn = Attention(d_model, n_heads)
+        self.norm_ff = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, ff_mult * d_model),
+            nn.GELU(),
+            nn.Linear(ff_mult * d_model, d_model),
+        )
+
+    def forward(self, x_q, x_kv=None, key_mask=None):
+        kv = self.norm_kv(x_kv) if x_kv is not None else None
+        x = x_q + self.attn(self.norm_q(x_q), kv, key_mask=key_mask)
+        x = x + self.ff(self.norm_ff(x))
+        return x
+
+
+# ----------------------------------------------------------------------------- #
+#  Board encoder (CNN with residual skip — shared across every placement)       #
+# ----------------------------------------------------------------------------- #
+class ConvResBlock(nn.Module):
+    """The 'Skip' connection from the diagram: conv -> conv with a residual add."""
+
+    def __init__(self, ch: int):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(ch, ch, 3, padding='same'),
+            nn.GELU(),
+            nn.Conv2d(ch, ch, 3, padding='same'),
+        )
 
     def forward(self, x):
+        return F.gelu(x + self.net(x))
+
+
+class BoardEncoder(nn.Module):
+    """Turns each candidate board (H, W) into a single d_model token.
+
+    The same weights run over all M placements, so the network treats each
+    placement identically (permutation-equivariant over the M axis).
+    """
+
+    def __init__(self, height: int, width: int, d_model: int, ch: int = 16):
+        super().__init__()
+        self.stem = nn.Sequential(nn.Conv2d(1, ch, 3, padding='same'), nn.GELU())
+        self.res = ConvResBlock(ch)
+        self.expand = nn.Sequential(nn.Conv2d(ch, 2 * ch, 3, padding='same'), nn.GELU())
+        self.pool = nn.MaxPool2d(2)
+
+        flat_dim = 2 * ch * (height // 2) * (width // 2)
+        self.proj = nn.Linear(flat_dim, d_model)
+
+    def forward(self, boards):  # (B, M, H, W) -> (B, M, d_model)
+        b, m = boards.shape[:2]
+        x = rearrange(boards, "b m h w -> (b m) 1 h w")
+        x = self.pool(self.expand((self.res(self.stem(x)))))
+        x = rearrange(x, "bm c h w -> bm (c h w)")
+        x = self.proj(x)
+        return rearrange(x, "(b m) d -> b m d", b=b, m=m)
+
+
+# ----------------------------------------------------------------------------- #
+#  Positional encoding                                                          #
+# ----------------------------------------------------------------------------- #
+class RoPE1D(nn.Module):
+    """Rotary positional encoding for the piece queue (current / hold / next-k)."""
+
+    def __init__(self, d_model: int, max_seq_len: int):
+        super().__init__()
+        assert d_model % 2 == 0, "d_model must be even for RoPE."
+
+        position = rearrange(torch.arange(max_seq_len), "s -> s 1")
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-np.log(10000.0) / d_model))
+        freqs = position * div_term  # (S, d_model // 2)
+
+        self.register_buffer("cos", torch.cos(freqs), persistent=False)
+        self.register_buffer("sin", torch.sin(freqs), persistent=False)
+
+    def forward(self, x):  # x: (B, S, d_model)
         seq_len = x.shape[1]
-        
-        # 'b s (d c) -> c b s d' handles the split and unpacking in one step
-        x_1, x_2 = rearrange(x, 'b s (d c) -> c b s d', c=2)
-        
-        # 's d -> 1 s d' replaces .unsqueeze(0)
-        cos = rearrange(self.cos[:seq_len], 's d -> 1 s d')
-        sin = rearrange(self.sin[:seq_len], 's d -> 1 s d')
-        
+
+        x_1, x_2 = rearrange(x, "b s (d c) -> c b s d", c=2)
+        cos = rearrange(self.cos[:seq_len], "s d -> 1 s d")
+        sin = rearrange(self.sin[:seq_len], "s d -> 1 s d")
+
         out_1 = x_1 * cos - x_2 * sin
         out_2 = x_1 * sin + x_2 * cos
-        
-        # einops automatically stacks the list and interleaves back to d_model
-        return rearrange([out_1, out_2], 'c b s d -> b s (d c)')
+        return rearrange([out_1, out_2], "c b s d -> b s (d c)")
+
+# ----------------------------------------------------------------------------- #
+#  Piece-queue encoder (embedding + role + RoPE + self-attention; cached)        #
+# ----------------------------------------------------------------------------- #
+
+class PieceEncoder(nn.Module):
+    """Encodes [current, hold/swap, next_1..next_k] into context tokens.
+
+    Computed once per board state and reused for every placement (the 'CACHE
+    / same between most' note). A learned role embedding lets the net tell the
+    swap piece apart from the incoming queue ('must learn difference between
+    the swap and the incoming ones').
+    """
+
+    NUM_ROLES = 3  # 0 = current, 1 = hold/swap, 2 = upcoming
+
+    def __init__(self, num_categories: int, d_model: int, n_heads: int,
+                 n_layers: int, max_pieces: int):
+        super().__init__()
+        self.embed = nn.Linear(num_categories, d_model)
+        self.role_embed = nn.Embedding(self.NUM_ROLES, d_model)
+        self.rope = RoPE1D(d_model, max_pieces)
+        self.layers = nn.ModuleList(
+            [TransformerBlock(d_model, n_heads) for _ in range(n_layers)]
+        )
+
+        roles = torch.full((max_pieces,), 2, dtype=torch.long)
+        roles[0] = 0
+        if max_pieces > 1:
+            roles[1] = 1
+        self.register_buffer("role_ids", roles, persistent=False)
+
+    def forward(self, queue):  # (B, S, num_categories) -> (B, S, d_model)
+        x = self.embed(queue) + self.role_embed(self.role_ids)  # (S, d) broadcasts
+        x = self.rope(x)
+        for block in self.layers:
+            x = block(x)
+        return x
+
+
+# ----------------------------------------------------------------------------- #
+#  Feature extractor                                                            #
+# ----------------------------------------------------------------------------- #
+class TurboMino(BaseFeaturesExtractor):
+    """Scores every candidate placement.
+
+    Pipeline
+    --------
+    boards (B, M, H, W) --CNN-------> board tokens (B, M, d)
+    queue  (B, S, C)    --emb+rope+SA-> piece tokens (B, S, d)   [computed once]
+
+    board -> piece  cross-attn : each placement pulls in the piece context
+    piece -> board  cross-attn : the pieces survey the whole placement set,
+                                 pooled into one board-aware summary
+
+    concat[ board, board<-piece, piece<-board ] -> shared MLP -> 1 value / placement
+
+    Output: (B, max_placements). Invalid placements are masked when an optional
+    `placement_mask` (B, M) is provided in the observation.
+    """
+
+    MASK_VALUE = -1e9  # masked-out placements (treat as action logits downstream)
+
+    def __init__(
+        self, 
+        T_CONFIG: TetrisConfiguration, 
+        CONFIG: Configuration,
+        observation_space
+    ):
+        # We emit one value per placement, so that is our feature dimension.
+        super().__init__(observation_space, features_dim=CONFIG.max_placements)
+
+        self.CONFIG = CONFIG
+        self.T_CONFIG = T_CONFIG
+
+        d_model = getattr(CONFIG, "d_model", 64)
+        n_heads = getattr(CONFIG, "n_heads", 4)
+        n_self_layers = getattr(CONFIG, "n_piece_layers", 2)
+        head_hidden = getattr(CONFIG, "head_hidden", 128)
+
+        _, height, width = observation_space["boards"].shape
+
+        self.board_encoder = BoardEncoder(height, width, d_model)
+        self.piece_encoder = PieceEncoder(
+            num_categories=T_CONFIG.num_piece_categories,
+            d_model=d_model,
+            n_heads=n_heads,
+            n_layers=n_self_layers,
+            max_pieces=T_CONFIG.max_pieces_in_view,
+        )
+
+        # The two cross-attention heads bridging the CNN and the piece embeddings.
+        self.board_to_piece = TransformerBlock(d_model, n_heads)  # Q=board, KV=piece
+        self.piece_to_board = TransformerBlock(d_model, n_heads)  # Q=piece, KV=board
+
+        # Per-placement value head ('Oculto' MLP), shared across the M placements.
+        self.placement_head = nn.Sequential(
+            nn.LayerNorm(3 * d_model),
+            nn.Linear(3 * d_model, head_hidden),
+            nn.GELU(),
+            nn.Linear(head_hidden, head_hidden),
+            nn.GELU(),
+            nn.Linear(head_hidden, 1),
+        )
+
+    def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
+        boards = observations["boards"]              # (B, M, H, W)
+        queue = observations["queue"]                # (B, S, C)
+        mask = observations.get("placement_mask")    # (B, M) or None
+        key_mask = mask.bool() if mask is not None else None
+
+        board_tok = self.board_encoder(boards)       # (B, M, d)
+        piece_tok = self.piece_encoder(queue)        # (B, S, d) — cached / shared
+
+        # Each placement queries the piece context (which placement suits the queue?).
+        b_from_p = self.board_to_piece(board_tok, piece_tok)            # (B, M, d)
+
+        # The pieces query the placement set, then collapse into one summary token.
+        p_from_b = self.piece_to_board(piece_tok, board_tok, key_mask=key_mask)
+        p_summary = reduce(p_from_b, "b s d -> b d", "mean")            # (B, d)
+        p_summary = repeat(p_summary, "b d -> b m d", m=board_tok.shape[1])
+
+        fused = torch.cat([board_tok, b_from_p, p_summary], dim=-1)     # (B, M, 3d)
+        values = rearrange(self.placement_head(fused), "b m 1 -> b m")  # (B, M)
+
+        if key_mask is not None:
+            values = values.masked_fill(~key_mask, self.MASK_VALUE)
+        return values

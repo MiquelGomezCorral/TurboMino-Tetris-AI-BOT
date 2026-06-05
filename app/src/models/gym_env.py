@@ -36,6 +36,11 @@ class TetrisEnv(gym.Env):
                 low=0.0, high=1.0, 
                 shape=(T_CONFIG.max_pieces_in_view, T_CONFIG.num_piece_categories), # 7 pieces (current, hold, 5 next), 9 categories
                 dtype=np.float32
+            ),
+            "placement_mask": spaces.Box(
+                low=0, high=1,
+                shape=(CONFIG.max_placements,),
+                dtype=bool
             )
         })
         
@@ -122,7 +127,8 @@ class TetrisEnv(gym.Env):
         # 3. Return the Dict directly
         return {
             "boards": boards_matrix,
-            "queue": queue_matrix
+            "queue": queue_matrix,
+            "placement_mask": self.valid_action_mask()
         }
     
 
