@@ -197,9 +197,9 @@ class TurboMino(BaseFeaturesExtractor):
 
     def __init__(
         self, 
+        observation_space,
         T_CONFIG: TetrisConfiguration, 
         CONFIG: Configuration,
-        observation_space
     ):
         # We emit one value per placement, so that is our feature dimension.
         super().__init__(observation_space, features_dim=CONFIG.max_placements)

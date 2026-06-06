@@ -8,6 +8,7 @@ from maikol_utils.other_utils import args_to_dataclass
 from maikol_utils.print_utils import print_separator
 
 from scripts import play_tetris_game
+from src.models import train_turbomino
 
 def cmd_play_tetris(args: argparse.Namespace):
     """Call play_tetris_from_config_list with the given args."""
@@ -16,9 +17,11 @@ def cmd_play_tetris(args: argparse.Namespace):
     play_tetris_game(CONFIG)
     print_separator("END ...", sep_type="START")
 
-def cmd_test(args):
-    """Call test functions."""
-    ...
+def cmd_train(args):
+    """Call training functions."""
+    CONFIG: Configuration = args_to_dataclass(args, Configuration)
+    T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
+    train_turbomino(CONFIG, T_CONFIG)
 
 # ======================================================================================
 #                                       ARGUMENTS
@@ -40,10 +43,10 @@ if __name__ == "__main__":
     p_play.set_defaults(func=cmd_play_tetris)
 
     # ======================================================================================
-    #                                       test
+    #                                       train
     # ======================================================================================
-    p_test = subparsers.add_parser("test", help="Test script with any code")
-    p_test.set_defaults(func=cmd_test)
+    p_train = subparsers.add_parser("train", help="Train the model")
+    p_train.set_defaults(func=cmd_train)
 
     # ======================================================================================
     #                                       CALL

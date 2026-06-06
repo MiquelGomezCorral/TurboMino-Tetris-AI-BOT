@@ -1,13 +1,14 @@
-exp_name: "base_name"
+exp_name: "basic_ppo"
 seed: 42
 
-gym_id: null
-learning_rate: 2.5e-4
-total_timesteps: 25000
+net_arch:  [128, 128]
+learning_rate: 3e-4
+n_steps: 2048
+batch_size: 256
+ent_coef: 0.015
+gamma: 0.99
+verbose: 1
 
-torch_deterministic: True
-cuda: True
+save_freq: 10000
 
-track_run: False
-wandb_project_name: "RL"
-wandb_entity: null
+total_timesteps: 5000000

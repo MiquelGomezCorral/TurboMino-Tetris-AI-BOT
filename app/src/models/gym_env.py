@@ -58,7 +58,7 @@ class TetrisEnv(gym.Env):
 
     def step(self, action):
         # 1. Execute the sequence chosen by the neural network
-        chosen_placement = self.all_placements[action]
+        chosen_placement, _ = self.all_placements[action]
         
         reward = self.game.get_score()
         for act in chosen_placement['sequence']:
