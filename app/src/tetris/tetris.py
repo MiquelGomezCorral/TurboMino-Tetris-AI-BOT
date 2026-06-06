@@ -55,7 +55,7 @@ class RotationEnum(enum.IntEnum):
 class Queue:
     def __init__(self, initial_pieces: str=None):
         # deque is strictly O(1) for appends and pops on both ends
-        self.pieces = deque(PieceEnum[c] for c in initial_pieces) if initial_pieces else deque()
+        self._pieces = deque(PieceEnum[c] for c in initial_pieces) if initial_pieces else deque()
         
         # Use standard list, random.shuffle is highly optimized for lists
         self.base_bag = [
@@ -63,32 +63,37 @@ class Queue:
             PieceEnum.S, PieceEnum.Z, PieceEnum.J, PieceEnum.L
         ]
         
-        if len(self.pieces) == 0:
+        if len(self._pieces) == 0:
             self._add_pieces()
             self._add_pieces()
     
     def _add_pieces(self):
         bag = self.base_bag.copy()
         random.shuffle(bag)
-        self.pieces.extend(bag) # O(k) extending, avoids memory reallocation
+        self._pieces.extend(bag) # O(k) extending, avoids memory reallocation
 
     def pop_piece(self) -> PieceEnum:
-        if len(self.pieces) <= 7:
+        if len(self._pieces) <= 7:
             self._add_pieces()
         
-        return self.pieces.popleft() # O(1) pop
+        return self._pieces.popleft() # O(1) pop
 
     def peek_piece(self) -> PieceEnum:
-        if len(self.pieces) <= 7:
+        if len(self._pieces) <= 7:
             self._add_pieces()
 
-        return self.pieces[0] # O(1) lookup
+        return self._pieces[0] # O(1) lookup
+    
+    def get_queue(self) -> deque:
+        if len(self._pieces) <= 7:
+            self._add_pieces()
+        return self._pieces
     
     def __len__(self):
-        return len(self.pieces)
+        return len(self._pieces)
     
     def __str__(self):
-        return f"Queue({[piece.name for piece in self.pieces]})"
+        return f"Queue({[piece.name for piece in self._pieces]})"
     
 
 class ActivePiece:
@@ -403,6 +408,7 @@ class Board:
             c_board = self.c_rows
 
         if self.color_map:
+            print('2')
             for y in reversed(range(row_count)):
                 line = ''
                 for x in range(self.width):
@@ -536,10 +542,41 @@ class Tetris:
         return self.hold_piece
 
     def get_next_pieces(self):
-        return [piece.name for piece in self.queue.pieces]
+        return [piece.name for piece in self.queue.get_queue()]
 
     def get_score(self):
         return self.score_system.score
+
+    def get_queue(self):
+        return [p.value for p in self.queue.get_queue()]
+
+    def is_game_over(self):
+        return self.game_over
+    
+    def get_level(self):
+        return self.score_system.level
+    
+    def get_active_piece_type(self):
+        return self.active_piece.type.value
+    
+    def get_hold_piece_type(self):
+        return self.hold_piece.value if self.hold_piece else PieceEnum.N.value
+    
+    def get_next_pieces_types(self, n=5):
+        return [p.value for p in list(self.queue.get_queue())[:n]]
+    
+    def get_next_piece_type(self):
+        return self.queue.peek_piece().value
+    
+    def get_hold_or_next_piece_type(self):
+        """Returns the piece type that would be active if the player performs a hold action right now.
+        If hold is available and there is a piece in hold, returns the hold piece type.
+        Otherwise, returns the next piece type from the queue.
+        """
+        if self.hold_piece and self.hold_piece != PieceEnum.N:
+            return self.get_hold_piece_type(), True   
+        else:
+            return self.get_next_piece_type(), False
 
     def print_state(self, include_vanish_zone=False):
         print("Current Board:")

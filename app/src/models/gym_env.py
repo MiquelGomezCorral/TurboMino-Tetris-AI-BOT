@@ -3,6 +3,8 @@ from gymnasium import spaces
 import numpy as np
 from einops import rearrange
 
+from maikol_utils.print_utils import print_warn
+
 from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, PieceEnum
 from src.config import Configuration
 
@@ -32,10 +34,15 @@ class TetrisEnv(gym.Env):
                 shape=(CONFIG.max_placements, CONFIG.max_board_size_h + T_CONFIG.vanish_zone, CONFIG.max_board_size_w), 
                 dtype=np.float32
             ),
-            "queue": spaces.Box(
+            "queues": spaces.Box(
                 low=0.0, high=1.0, 
-                shape=(T_CONFIG.max_pieces_in_view, T_CONFIG.num_piece_categories), # 7 pieces (current, hold, 5 next), 9 categories
+                shape=(2, T_CONFIG.max_pieces_in_view, T_CONFIG.num_piece_categories), # 7 pieces (current, hold, 5 next), 9 categories
                 dtype=np.float32
+            ),
+            "queue_idx": spaces.Box(
+                low=0, high=1, # 0 = Active, 1 = Hold
+                shape=(CONFIG.max_placements,), 
+                dtype=np.int64
             ),
             "placement_mask": spaces.Box(
                 low=0, high=1,
@@ -46,12 +53,12 @@ class TetrisEnv(gym.Env):
         
         self.game = None
         self.searcher = None
-        self.current_placements = []
+        self.all_placements = []
 
 
     def step(self, action):
         # 1. Execute the sequence chosen by the neural network
-        chosen_placement = self.current_placements[action]
+        chosen_placement = self.all_placements[action]
         
         reward = self.game.get_score()
         for act in chosen_placement['sequence']:
@@ -87,48 +94,85 @@ class TetrisEnv(gym.Env):
         return arr
     
 
-    def _get_obs(self):
-        # 1. Ask the MoveSearcher for all valid placements this turn
-        self.current_placements = self.searcher.get_all_placements()
-        print(f"Found {len(self.current_placements)} valid placements for piece {self.game.active_piece.type.name}")
-    
-        context_list = []
-
-        # A. Current Piece
-        context_list.append(self._get_one_hot(self.game.active_piece.type.value))
+    def _build_single_queue_context(self, active_val: int, hold_val: int, upcoming_vals: list[int]) -> np.ndarray:
+        """Helper to build the (S, C) one-hot context matrix for a specific scenario."""
+        context_list = [
+            self._get_one_hot(active_val),
+            self._get_one_hot(hold_val)
+        ]
         
-        # B. Hold Piece (Default to 0 / N if None)
-        hold_val = self.game.hold_piece.value if self.game.hold_piece else PieceEnum.N.value
-        context_list.append(self._get_one_hot(hold_val))
-        
-        # C. Next Pieces
-        queue_list = list(self.game.queue.pieces)
-        for i in range(self.T_CONFIG.max_pieces_on_queue_view): 
-            next_val = queue_list[i].value if i < len(queue_list) else PieceEnum.N.value
-            context_list.append(self._get_one_hot(next_val))
-
+        for i in range(self.T_CONFIG.max_pieces_on_queue_view):
+            val = upcoming_vals[i] if i < len(upcoming_vals) else PieceEnum.N.value
+            context_list.append(self._get_one_hot(val))
             
-        queue_matrix = np.array(context_list, dtype=np.float32) # Shape: (7, 9)
+        return np.array(context_list, dtype=np.float32)
+
+    def _get_obs(self):
+        # ========== 1. Ask the MoveSearcher for all valid placements ========== 
+        active_piece_type = self.game.get_active_piece_type()
+        hold_piece_type, had_hold = self.game.get_hold_or_next_piece_type()
+
+        active_placements = self.searcher.get_all_placements(piece_type=PieceEnum(active_piece_type))
+        hold_placements = self.searcher.get_all_placements(piece_type=PieceEnum(hold_piece_type))
+
+        # ==========  2. Build the two unique queue contexts ========== 
+        queue_list = self.game.get_queue() 
+        
+        # A. Active Queue Scenario
+        active_q_matrix = self._build_single_queue_context(
+            active_val=active_piece_type,
+            hold_val=hold_piece_type,
+            upcoming_vals=queue_list
+        )
+        
+        # B. Hold Queue Scenario
+        hold_q_matrix = self._build_single_queue_context(
+            active_val=hold_piece_type,
+            hold_val=active_piece_type,
+            # Normal swap
+            upcoming_vals=queue_list if had_hold else queue_list[1:]
+        )
+
+        # Stack into shape (2, S, C)
+        queues_tensor = np.stack([active_q_matrix, hold_q_matrix])
+
+
+
+        # ========== 3. Combine Placements and Build Boards & Mapping ========== 
+        self.all_placements = []
         boards_matrix = np.zeros((
             self.CONFIG.max_placements,
             self.CONFIG.max_board_size_h + self.T_CONFIG.vanish_zone,
-            self.CONFIG.max_board_size_w),
-        dtype=np.float32)
+            self.CONFIG.max_board_size_w
+        ), dtype=np.float32)
+        
+        queue_idx_matrix = np.zeros(self.CONFIG.max_placements, dtype=np.int64)
 
         pad_h = max(0, self.CONFIG.max_board_size_h - (self.T_CONFIG.board_h + self.T_CONFIG.vanish_zone))
         pad_left = max(0, (self.CONFIG.max_board_size_w - self.T_CONFIG.board_w) // 2)
         pad_right = max(0, self.CONFIG.max_board_size_w - self.T_CONFIG.board_w - pad_left)
 
-        for i, placement in enumerate(self.current_placements):
+        # Merge active and hold placements, tagging them with their queue index
+        # 0 = Active, 1 = Hold
+        placements_to_process = [(p, 0) for p in active_placements] + [(p, 1) for p in hold_placements]
+
+        for i, (placement, q_idx) in enumerate(placements_to_process):
             if i >= self.CONFIG.max_placements:
+                print_warn(f"Number of placements ({len(placements_to_process)}) exceeds CONFIG.max_placements ({self.CONFIG.max_placements}). Truncating extra placements. Increase CONFIG.max_placements to capture more.")
                 break
+                
             grid = self._extract_features_2d(placement['bitmap'])
             boards_matrix[i] = np.pad(grid, ((0, pad_h), (pad_left, pad_right)), constant_values=1)
+            queue_idx_matrix[i] = q_idx
             
-        # 3. Return the Dict directly
+            # Save to unified list for the step() function to execute later
+            self.all_placements.append((placement, q_idx))
+
+        # 4. Return the Dictionary
         return {
             "boards": boards_matrix,
-            "queue": queue_matrix,
+            "queues": queues_tensor,
+            "queue_idx": queue_idx_matrix,
             "placement_mask": self.valid_action_mask()
         }
     
@@ -139,7 +183,7 @@ class TetrisEnv(gym.Env):
         It returns a boolean array shape (MAX_PLACEMENTS,).
         True = Valid Move | False = Padded/Illegal Move
         """
-        num_valid = len(self.current_placements)
+        num_valid = len(self.all_placements)
         mask = np.zeros(self.CONFIG.max_placements, dtype=bool)
         mask[:num_valid] = True
         return mask

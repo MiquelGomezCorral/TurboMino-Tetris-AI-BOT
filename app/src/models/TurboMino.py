@@ -237,26 +237,54 @@ class TurboMino(BaseFeaturesExtractor):
             nn.Linear(head_hidden, 1),
         )
 
+
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
         boards = observations["boards"]              # (B, M, H, W)
-        queue = observations["queue"]                # (B, S, C)
+        queues = observations["queues"]              # (B, 2, S, C)
+        queue_idx = observations["queue_idx"].long() # (B, M)
         mask = observations.get("placement_mask")    # (B, M) or None
         key_mask = mask.bool() if mask is not None else None
 
+        B, M = boards.shape[:2]
+        _, num_queues, S, C = queues.shape
+
+        # 1. Encode the Board
         board_tok = self.board_encoder(boards)       # (B, M, d)
-        piece_tok = self.piece_encoder(queue)        # (B, S, d) — cached / shared
 
-        # Each placement queries the piece context (which placement suits the queue?).
-        b_from_p = self.board_to_piece(board_tok, piece_tok)            # (B, M, d)
+        # 2. Encode the Unique Queues Efficiently (Runs only 2 times per batch item, not M times)
+        flat_queues = rearrange(queues, "b k s c -> (b k) s c")
+        flat_piece_toks = self.piece_encoder(flat_queues)
+        # Reshape back to (Batch, 2, Seq, d_model)
+        piece_toks = rearrange(flat_piece_toks, "(b k) s d -> b k s d", b=B, k=num_queues)
 
-        # The pieces query the placement set, then collapse into one summary token.
-        p_from_b = self.piece_to_board(piece_tok, board_tok, key_mask=key_mask)
-        p_summary = reduce(p_from_b, "b s d -> b d", "mean")            # (B, d)
-        p_summary = repeat(p_summary, "b d -> b m d", m=board_tok.shape[1])
+        # 3. Gather Mapping: Assign the correct piece context to each of the M placements
+        batch_indices = torch.arange(B, device=boards.device).view(B, 1)
+        # Advanced indexing extracts the specific queue for each placement
+        # piece_tok_per_placement shape: (B, M, S, d)
+        piece_tok_per_placement = piece_toks[batch_indices, queue_idx] 
 
+        # 4. Board -> Piece Cross-Attention (Isolated Tunnels)
+        # We temporarily collapse (B, M) into a single batch dimension. 
+        # This mathematically guarantees Placement X only attends to Queue X, with zero crosstalk.
+        board_tok_flat = rearrange(board_tok, "b m d -> (b m) 1 d")
+        piece_tok_flat = rearrange(piece_tok_per_placement, "b m s d -> (b m) s d")
+        
+        b_from_p_flat = self.board_to_piece(board_tok_flat, piece_tok_flat)
+        b_from_p = rearrange(b_from_p_flat, "(b m) 1 d -> b m d", b=B, m=M)
+
+        # 5. Piece -> Board (The Global Summary)
+        # The base state of the turn is defined by the Active Piece (Index 0).
+        # We let the Active Queue survey ALL M boards to understand the overall options.
+        active_piece_tok = piece_toks[:, 0, :, :] # (B, S, d)
+        p_from_b = self.piece_to_board(active_piece_tok, board_tok, key_mask=key_mask)
+        p_summary = reduce(p_from_b, "b s d -> b d", "mean")          # (B, d)
+        p_summary = repeat(p_summary, "b d -> b m d", m=M)            # (B, M, d)
+
+        # 6. Fuse and Score
         fused = torch.cat([board_tok, b_from_p, p_summary], dim=-1)     # (B, M, 3d)
         values = rearrange(self.placement_head(fused), "b m 1 -> b m")  # (B, M)
 
         if key_mask is not None:
             values = values.masked_fill(~key_mask, self.MASK_VALUE)
+            
         return values

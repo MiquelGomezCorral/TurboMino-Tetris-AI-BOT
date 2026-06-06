@@ -31,7 +31,7 @@ class Configuration:
     gym_id:          str = None
     total_timesteps: int = 25_000
 
-    max_placements: int = 50
+    max_placements: int = 80
     d_model: int = 128
     n_heads: int = 4
     head_hidden: int = 256
