@@ -35,6 +35,7 @@ class ActionEnum(enum.Enum):
     ROTATE_180 = 4
     DROP    = 5
     HOLD    = 6
+    DOWN    = 7
 
 ROTATION_DIR = {
     ActionEnum.ROTATE_CW:   1,
@@ -517,6 +518,9 @@ class Tetris:
                 self.active_piece.reset_piece(self.active_piece.type)
 
             self.can_hold = False
+            self.last_action_was_rotation = False
+        elif action == ActionEnum.DOWN:
+            self.board.move_piece_down(self.active_piece)
             self.last_action_was_rotation = False
 
         return cleared_lines

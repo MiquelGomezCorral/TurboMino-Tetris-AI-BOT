@@ -73,7 +73,7 @@ class MoveSearcher:
                 down_state = (x, y - 1, rot_val)
                 if down_state not in visited:
                     visited.add(down_state)
-                    queue.append((*down_state, path))
+                    queue.append((*down_state, path + (ActionEnum.DOWN,)))
                 continue # Skip lateral inputs mid-air to match true physics rules
 
             # --- LATERAL & ROTATIONAL SEARCH BRANCHES ---
