@@ -113,7 +113,7 @@ class TetrisEnv(gym.Env):
         hold_piece_type, had_hold = self.game.get_hold_or_next_piece_type()
 
         active_placements = self.searcher.get_all_placements(piece_type=PieceEnum(active_piece_type))
-        hold_placements = self.searcher.get_all_placements(piece_type=PieceEnum(hold_piece_type))
+        hold_placements = self.searcher.get_all_placements(piece_type=PieceEnum(hold_piece_type), prepend_hold=True)
 
         # ==========  2. Build the two unique queue contexts ========== 
         queue_list = self.game.get_queue() 

@@ -6,7 +6,7 @@ from .tetris import ActionEnum, Board, ActivePiece, PieceEnum, RotationEnum, Tet
 class MoveSearcher:
     def __init__(self, game: Tetris = None):
         self.game = game
-    def get_all_placements(self, piece_type: PieceEnum = None, board: Board = None, clear_lines: bool = True) -> list[dict]:
+    def get_all_placements(self, piece_type: PieceEnum = None, board: Board = None, clear_lines: bool = True, prepend_hold: bool = False) -> list[dict]:
         """
         Finds all valid unique piece placement lock positions.
         Returns a list of dictionaries containing:
@@ -64,7 +64,7 @@ class MoveSearcher:
 
                     placements[footprint] = {
                         'state': (x, y, rot_val),
-                        'sequence': list(path) + [ActionEnum.DROP],
+                        'sequence': list(path) + [ActionEnum.DROP] if not prepend_hold else [ActionEnum.HOLD] + list(path) + [ActionEnum.DROP],
                         'bitmap': new_b_rows,
                         'lines_cleared': lines_cleared,
                     }
