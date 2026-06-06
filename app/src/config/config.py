@@ -34,6 +34,7 @@ class Configuration:
     max_placements: int = 50
     d_model: int = 128
     n_heads: int = 4
+    head_hidden: int = 256
     n_piece_layers: int = 2
     max_board_size_w: int = 10
     max_board_size_h: int = 20

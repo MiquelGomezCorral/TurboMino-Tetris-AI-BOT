@@ -75,21 +75,22 @@ class TetrisEnv(gym.Env):
         
         # Initialize your engine
         self.game = Tetris(width=self.T_CONFIG.board_w, height=self.T_CONFIG.board_h)
-        self.searcher = MoveSearcher(self.game.board)
+        self.searcher = MoveSearcher(self.game)
         
         obs = self._get_obs()
         return obs, {}
 
     
     def _get_one_hot(self, piece_val):
-            arr = np.zeros(self.T_CONFIG.num_piece_categories, dtype=np.float32)
-            arr[piece_val] = 1.0
-            return arr
+        arr = np.zeros(self.T_CONFIG.num_piece_categories, dtype=np.float32)
+        arr[piece_val] = 1.0
+        return arr
     
 
     def _get_obs(self):
         # 1. Ask the MoveSearcher for all valid placements this turn
-        self.current_placements = self.searcher.get_all_placements(self.game.active_piece.type)
+        self.current_placements = self.searcher.get_all_placements()
+        print(f"Found {len(self.current_placements)} valid placements for piece {self.game.active_piece.type.name}")
     
         context_list = []
 
