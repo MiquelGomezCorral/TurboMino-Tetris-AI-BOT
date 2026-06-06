@@ -7,7 +7,7 @@ from src.tetris import TetrisConfiguration
 from maikol_utils.other_utils import args_to_dataclass
 from maikol_utils.print_utils import print_separator
 
-from scripts import play_tetris_game
+from scripts import play_tetris_game, showcase_model
 from src.models import train_turbomino
 
 def cmd_play_tetris(args: argparse.Namespace):
@@ -22,6 +22,12 @@ def cmd_train(args):
     CONFIG: Configuration = args_to_dataclass(args, Configuration)
     T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
     train_turbomino(CONFIG, T_CONFIG)
+
+def cmd_showcase(args):
+    """Call showcase functions."""
+    CONFIG: Configuration = args_to_dataclass(args, Configuration)
+    T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
+    showcase_model(CONFIG, T_CONFIG)
 
 # ======================================================================================
 #                                       ARGUMENTS
@@ -48,6 +54,15 @@ if __name__ == "__main__":
     p_train = subparsers.add_parser("train", help="Train the model")
     p_train.set_defaults(func=cmd_train)
 
+
+     # ======================================================================================
+    #                                       showcase
+    # ======================================================================================
+    p_showcase = subparsers.add_parser("showcase", help="Showcase the trained model")
+    p_showcase.add_argument("--exp_name", type=str, default="base_name", help="Experiment name for logging and model saving (default: base_name)")
+    p_showcase.add_argument("--model_path", type=str, default=None, help="Path to the trained model (default: None)")
+    
+    p_showcase.set_defaults(func=cmd_showcase)
     # ======================================================================================
     #                                       CALL
     # ======================================================================================

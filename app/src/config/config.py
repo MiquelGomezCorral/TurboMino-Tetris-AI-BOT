@@ -29,6 +29,8 @@ class Configuration:
     checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints")
     log_dir: str = os.path.join(LOGS_PATH, f"tensorboard_{exp_name}")
     final_model_path: str = os.path.join(MODELS_PATH, f"tetris_turbomino_{exp_name}.zip")
+
+    model_path: str = None
     # ===================================================================
     #                       PARAMETER
     # ===================================================================
@@ -63,7 +65,15 @@ class Configuration:
 
 
     def __post_init__(self):
-        # Basic setup: create folders
+        if self.config:
+            self.load_yaml(self.config)
+
+        # Recompute paths (exp_name may have changed from YAML or CLI)
+        self.log_dir = os.path.join(self.LOGS_PATH, f"tensorboard_{self.exp_name}")
+        self.final_model_path = os.path.join(self.MODELS_PATH, f"tetris_turbomino_{self.exp_name}.zip")
+        if self.model_path is None:
+            self.model_path = self.final_model_path
+
         make_dirs([
             self.DATA_PATH, 
             self.MODELS_PATH, 
@@ -71,9 +81,6 @@ class Configuration:
             self.checkpoint_dir,
             self.log_dir,
         ])
-
-        if self.config:
-            self.load_yaml(self.config)
 
         
     def load_yaml(self, yaml_file: str) -> None:
@@ -86,8 +93,3 @@ class Configuration:
         for key, value in yaml_data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-
-        # Recompute paths that depend on exp_name or other YAML-overridable fields
-        self.log_dir = os.path.join(self.LOGS_PATH, f"tensorboard_{self.exp_name}")
-        self.final_model_path = os.path.join(self.MODELS_PATH, f"tetris_turbomino_{self.exp_name}.zip")
-        make_dirs([self.log_dir])
