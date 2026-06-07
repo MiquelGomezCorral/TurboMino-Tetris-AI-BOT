@@ -27,18 +27,29 @@ class Configuration:
     raw_dataset_path: str = os.path.join(DATA_PATH, "data.csv")
     processed_dataset_path: str = os.path.join(DATA_PATH, "processed_dataset.csv")
 
+    pretrain_model_path: str = os.path.join(MODELS_PATH, "pretrain_model")
     checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints")
     log_dir: str = os.path.join(LOGS_PATH, f"tensorboard_{exp_name}")
     final_model_path: str = os.path.join(MODELS_PATH, f"tetris_turbomino_{exp_name}.zip")
 
     model_path: str = None
     # ===================================================================
-    #                       PARAMETER
+    #                       PARAMETER PRETRAIN
     # ===================================================================
 
     seed:     int = 42
     test_size: float = 0.2
     val_size:  float = 0.1
+
+
+    epochs: int = 100
+    patience: int = 10
+    label_smoothing: float = 0.1
+
+
+    # ===================================================================
+    #                       PARAMETER RL
+    # ===================================================================
 
     gym_id:          str = None
     

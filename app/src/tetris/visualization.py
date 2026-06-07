@@ -7,11 +7,11 @@ from dataclasses import dataclass, field
 class TetrisConfiguration:
     # --- Settable from CLI ---
     cell_size: int = 30
-    board_w: int = 10
+    board_w: int = 4
     board_h: int = 20
     vanish_zone: int = 4
-    death_penalty: int = -0.5
-    alive_bonus: int = 1
+    death_penalty: int = -1
+    alive_bonus: int = 10
     max_pieces_on_queue_view: int = 5
     max_pieces_in_view: int = max_pieces_on_queue_view + 2 # + Hold + Active
     num_piece_categories: int = len(PieceEnum) - 1

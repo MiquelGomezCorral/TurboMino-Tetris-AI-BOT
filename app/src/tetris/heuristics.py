@@ -4,8 +4,6 @@ from typing import NamedTuple
 from .tetris import Board
 
 class HeuristicsResult(NamedTuple):
-    lines_cleared: int
-    tetrises: int
     blocks: int
     weighted_blocks: int
     clearable_lines: int
@@ -18,11 +16,9 @@ class HeuristicsResult(NamedTuple):
 
 
     base_weights = {
-        'lines_cleared': 1.0,
-        'tetrises': 1.0,
-        'blocks': -0.05,
-        'weighted_blocks': -0.01,
-        'clearable_lines': 5.0,
+        'blocks': -0.01,
+        'weighted_blocks': -0.1,
+        'clearable_lines': 1.0,
         'roughness': -0.25,
         'col_holes': -1.0,
         'connected_holes': -1.0,
@@ -30,13 +26,11 @@ class HeuristicsResult(NamedTuple):
         'pit_hole_percent': -0.5,
         'deepest_well': 0.5,
 
-        'total': 0.5,  # Optional: weight for the total score itself if you want to include it
+        'total': 1.0,  # Optional: weight for the total score itself if you want to include it
     }
 
     def __str__(self):
         return (f"HeuristicsResult(\n"
-                f"  lines_cleared={self.lines_cleared}, \n"
-                f"  tetrises={self.tetrises}, \n"
                 f"  blocks={self.blocks}, \n"
                 f"  weighted_blocks={self.weighted_blocks}, \n"
                 f"  clearable_lines={self.clearable_lines}, \n" 
@@ -73,24 +67,11 @@ class HeuristicEvaluator:
         _POPCOUNT16[_i] = bin(_i).count('1')
 
     def __init__(self):
-        # Cumulative game-level counters (updated externally or via update_game_counters)
-        self.lines_cleared: int = 0
-        self.tetrises: int = 0
-
-    # ------------------------------------------------------------------
-    # Game-level counter management
-    # ------------------------------------------------------------------
-
-    def update_game_counters(self, lines_just_cleared: int) -> None:
-        """Call after each piece lock with the number of lines cleared."""
-        self.lines_cleared += lines_just_cleared
-        if lines_just_cleared == 4:
-            self.tetrises += 1
+        powers = np.arange(24, dtype=np.float32)
+        self._block_weights = np.minimum(0.01 * (2 ** powers), 10.24)
 
     def reset(self) -> None:
-        self.lines_cleared = 0
-        self.tetrises = 0
-
+        ...
     # ------------------------------------------------------------------
     # Core low-level helpers
     # ------------------------------------------------------------------
@@ -144,11 +125,9 @@ class HeuristicEvaluator:
         """Total filled cells in visible area."""
         return int(self._popcount_rows(b_rows[:visible_height]).sum())
 
-    def weighted_blocks(self, b_rows: np.ndarray, visible_height: int) -> int:
-        """Sum of (row_index+1) * popcount(row), higher rows weigh more."""
-        row_pops = self._popcount_rows(b_rows[:visible_height])  # (H,)
-        weights = np.arange(1, visible_height + 1, dtype=np.int32)
-        return int((row_pops * weights).sum())
+    def weighted_blocks(self, b_rows: np.ndarray, visible_height: int) -> float:
+        row_pops = self._popcount_rows(b_rows[:visible_height])
+        return float((row_pops * self._block_weights[:visible_height]).sum())
 
     def clearable_lines(self, b_rows: np.ndarray, width: int, visible_height: int) -> int:
         """
@@ -299,8 +278,6 @@ class HeuristicEvaluator:
         hole_mask = self._hole_mask(b_rows, width, visible_height, col_heights)
 
         return HeuristicsResult(
-            lines_cleared=self.lines_cleared,
-            tetrises=self.tetrises,
             blocks=self.blocks(b_rows, visible_height),
             weighted_blocks=self.weighted_blocks(b_rows, visible_height),
             clearable_lines=self.clearable_lines(b_rows, width, visible_height),

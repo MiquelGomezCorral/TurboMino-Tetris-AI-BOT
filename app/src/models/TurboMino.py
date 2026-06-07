@@ -228,10 +228,11 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         self.piece_to_board = TransformerBlock(d_model, n_heads)  # Q=piece, KV=board
 
         # Per-placement value head ('Oculto' MLP), shared across the M placements.
+        self.feature_scale = nn.Parameter(torch.tensor(10.0))
         self.placement_head = nn.Sequential(
-            nn.LayerNorm(3 * d_model),
-            nn.Linear(3 * d_model, head_hidden),
+            nn.Linear(2 * d_model, head_hidden),
             nn.GELU(),
+            nn.LayerNorm(head_hidden),
             nn.Linear(head_hidden, head_hidden),
             nn.GELU(),
             nn.Linear(head_hidden, CONFIG.features_per_placement),
@@ -272,21 +273,16 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         b_from_p_flat = self.board_to_piece(board_tok_flat, piece_tok_flat)
         b_from_p = rearrange(b_from_p_flat, "(b m) 1 d -> b m d", b=B, m=M)
 
-        # 5. Piece -> Board (The Global Summary)
-        # The base state of the turn is defined by the Active Piece (Index 0).
-        # We let the Active Queue survey ALL M boards to understand the overall options.
-        active_piece_tok = piece_toks[:, 0, :, :] # (B, S, d)
-        p_from_b = self.piece_to_board(active_piece_tok, board_tok, key_mask=key_mask)
-        p_summary = reduce(p_from_b, "b s d -> b d", "mean")          # (B, d)
-        p_summary = repeat(p_summary, "b d -> b m d", m=M)            # (B, M, d)
+        # 5. Piece -> Board (The Global Summary) — currently not used in fused
+        # active_piece_tok = piece_toks[:, 0, :, :] # (B, S, d)
+        # p_from_b = self.piece_to_board(active_piece_tok, board_tok, key_mask=key_mask)
+        # p_summary = reduce(p_from_b, "b s d -> b d", "mean")          # (B, d)
 
         # 6. Fuse and Score
-        fused = torch.cat([board_tok, b_from_p, p_summary], dim=-1)     # (B, M, 3d)
-        # values = rearrange(self.placement_head(fused), "b m 1 -> b m")  # (B, M)
-        # if key_mask is not None:
-            # values = values.masked_fill(~key_mask, self.MASK_VALUE)
-        values = self.placement_head(fused)                           # (B, M, 4)
-        final_features = rearrange(values, "b m f -> b (m f)")        # (B, M * 4)            
+        fused = torch.cat([board_tok, b_from_p], dim=-1)              # (B, M, 2d)
+        fused = fused * self.feature_scale
+        values = self.placement_head(fused)                           # (B, M, f)
+        final_features = rearrange(values, "b m f -> b (m f)")        # (B, M * f)
         return final_features
     
 
@@ -295,43 +291,88 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
 #  Pretrain module                                                            #
 # ----------------------------------------------------------------------------- #
 class TurboMinoModule(pl.LightningModule):
-    def __init__(self, CONFIG: Configuration, weights=None):
+    """
+    Pretraining wrapper for TurboMinoEncoder.
+    
+    Task: given a board state + piece queue, predict which placement index
+    the expert (e.g. heuristic agent) would choose.
+    
+    Input batch: (observations_dict, target_placement_idx)
+      observations_dict keys: boards, queues, queue_idx, placement_mask
+      target: (B,) long — index of the correct placement in [0, M)
+    """
+    def __init__(
+        self, 
+        CONFIG: Configuration, 
+        T_CONFIG: TetrisConfiguration,
+        observation_space,
+        weights=None,
+    ):
         super().__init__()
+        self.save_hyperparameters(ignore=["weights"])
         self.CONFIG = CONFIG
-        self.model = TurboMinoEncoder(CONFIG)
+        self.T_CONFIG = T_CONFIG
 
-        self.criterion = torch.nn.CrossEntropyLoss(
-            label_smoothing=CONFIG.label_smoothing 
+        self.encoder = TurboMinoEncoder(observation_space, T_CONFIG, CONFIG)
+
+        # Project (M * f) back to M logits for placement classification
+        self.classifier_head = nn.Linear(
+            CONFIG.features_per_placement, 1  # applied per-placement, shared weights
         )
 
-    def forward(self, x):
-        return self.model(x)
+        self.criterion = nn.CrossEntropyLoss(
+            label_smoothing=getattr(CONFIG, "label_smoothing", 0.0)
+        )
+
+        if weights is not None:
+            self.load_state_dict(weights)
+
+    def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
+        """Returns placement logits (B, M)."""
+        features = self.encoder(observations)                        # (B, M * f)
+        B = features.shape[0]
+        M = self.CONFIG.max_placements
+        f = self.CONFIG.features_per_placement
+
+        per_placement = features.view(B, M, f)                       # (B, M, f)
+        logits = self.classifier_head(per_placement).squeeze(-1)     # (B, M)
+
+        # Mask invalid placements before loss / argmax
+        mask = observations.get("placement_mask")
+        if mask is not None:
+            logits = logits.masked_fill(mask.bool(), TurboMinoEncoder.MASK_VALUE)
+
+        return logits                                                 # (B, M)
 
     def _shared_step(self, batch, stage: str):
-        x, y = batch
-        logits = self(x)
-        loss = self.criterion(logits, y)
-        preds = torch.argmax(logits, dim=1)
-        acc = (preds == y).float().mean()
+        observations, targets = batch   # targets: (B,) long, index in [0, M)
 
-        self.log(f"{stage}_loss", loss, prog_bar=True, on_epoch=True, on_step=False)
-        self.log(f"{stage}_acc", acc, prog_bar=True, on_epoch=True, on_step=False)
+        logits = self(observations)     # (B, M)
+        loss = self.criterion(logits, targets)
+
+        preds = torch.argmax(logits, dim=1)
+        acc = (preds == targets).float().mean()
+
+        # Top-3 acc is useful when M=128 — exact match is hard
+        top3 = (
+            logits.topk(3, dim=1).indices == targets.unsqueeze(1)
+        ).any(dim=1).float().mean()
+
+        self.log(f"{stage}/loss",     loss,  prog_bar=True,  on_epoch=True, on_step=False)
+        self.log(f"{stage}/acc_top1", acc,   prog_bar=True,  on_epoch=True, on_step=False)
+        self.log(f"{stage}/acc_top3", top3,  prog_bar=False, on_epoch=True, on_step=False)
         return loss
 
     def training_step(self, batch, batch_idx):
-        return self._shared_step(batch, stage="train")
+        return self._shared_step(batch, "train")
 
     def validation_step(self, batch, batch_idx):
-        self._shared_step(batch, stage="val")
+        return self._shared_step(batch, "val")
+
+    def test_step(self, batch, batch_idx):
+        return self._shared_step(batch, "test")
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.SGD(
-        #     self.parameters(),
-        #     lr=self.CONFIG.learning_rate,
-        #     momentum=self.CONFIG.momentum,
-        #     weight_decay=self.CONFIG.weight_decay,
-        #     nesterov=True,
-        # )
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.CONFIG.learning_rate,
@@ -339,19 +380,25 @@ class TurboMinoModule(pl.LightningModule):
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer,
-            T_0=self.CONFIG.epochs,      # restart every N epochs
-            eta_min=self.CONFIG.eta_min, # minimum lr
+            T_0=self.CONFIG.epochs,
+            eta_min=self.CONFIG.eta_min,
         )
-
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_acc",
                 "interval": "epoch",
                 "frequency": 1,
-                "strict": True,
+                "monitor": "val/loss",
             },
         }
-    def is_symmetric(self):
-        return self.model.symmetric
+
+    def transfer_encoder_weights(self, rl_policy):
+        """
+        Copy pretrained encoder weights into an SB3 policy's features extractor.
+        Call after pretraining, before RL training.
+        """
+        rl_policy.features_extractor.load_state_dict(
+            self.encoder.state_dict(), strict=True
+        )
+

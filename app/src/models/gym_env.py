@@ -2,9 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-from maikol_utils.print_utils import print_warn
-
-from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, PieceEnum, HeuristicEvaluator
+from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, HeuristicEvaluator
 from src.config import Configuration
 
 class TetrisEnv(gym.Env):
