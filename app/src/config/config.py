@@ -52,11 +52,15 @@ class Configuration:
     net_arch: list[int] = field(default_factory=lambda: [64, 64])
     features_per_placement: int = 4
     learning_rate: float = 3e-4
+    lr_end: float = 1e-5
     n_steps: int = 2048
     batch_size: int = 256
-    ent_coef: float = 0.005
+    ent_coef: float = 0.02
+    ent_coef_end: float = 0.001
+    clip_range: float = 0.2
     gamma: float = 0.999
     verbose: int = 0
+    n_envs: int = 1
 
     save_freq: int = 50_000
     eval_episodes: int = 100
@@ -65,6 +69,7 @@ class Configuration:
     total_timesteps: int = 5_000_000
 
     clear_lines_on_placement: bool = True
+    use_heuristic_rewards: bool = True
 
 
     def __post_init__(self):

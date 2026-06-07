@@ -5,7 +5,7 @@ from einops import rearrange
 
 from maikol_utils.print_utils import print_warn
 
-from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, PieceEnum
+from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, PieceEnum, HeuristicEvaluator
 from src.config import Configuration
 
 class TetrisEnv(gym.Env):
@@ -17,6 +17,8 @@ class TetrisEnv(gym.Env):
 
         assert self.CONFIG.max_board_size_h >= self.T_CONFIG.board_h, "CONFIG.max_board_size_h must be >= T_CONFIG.board_h + T_CONFIG.vanish_zone"
         assert self.CONFIG.max_board_size_w >= self.T_CONFIG.board_w, "CONFIG.max_board_size_w must be >= T_CONFIG.board_w"
+
+        self.evaluator = HeuristicEvaluator()
 
         # 1. Action Space: Select an index from 0 to MAX_PLACEMENTS - 1
         self.action_space = spaces.Discrete(CONFIG.max_placements)
@@ -73,10 +75,10 @@ class TetrisEnv(gym.Env):
             reward = self.T_CONFIG.death_penalty
         else: 
             reward = self.game.get_score() - reward + self.T_CONFIG.alive_bonus # Reward is the score difference after the move
-            if reward > 0:
-                reward = np.sqrt(reward) / 10.0
-            else:
-                reward = float(reward)
+            if self.CONFIG.use_heuristic_rewards:
+                reward += self.evaluator.evaluate(self.game.board).compute_total()
+
+            reward = np.sign(reward) * np.sqrt(np.abs(reward)) / 10.0
 
         
         # 4. Get next states

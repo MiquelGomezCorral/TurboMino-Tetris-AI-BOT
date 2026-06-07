@@ -4,3 +4,5 @@ from .scoring import SpinType, ScoringSystem
 from .visualization import draw_cell, draw_ui_piece, draw_text, TetrisConfiguration
 
 from .algorithms import MoveSearcher
+
+from .heuristics import HeuristicsResult, HeuristicEvaluator

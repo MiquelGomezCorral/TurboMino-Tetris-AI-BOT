@@ -2,15 +2,17 @@ import os
 import numpy as np
 import gymnasium as gym
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.monitor import Monitor
 
 # Import your environment, configs, and neural network
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from src.models import TurboMino, TetrisEnv
-from src.models.callbacks import ProgressBarCallback
+from src.models.callbacks import ProgressBarCallback, EntropyAnnealCallback
 
 # ==========================================
 # 1. Masking Wrapper Function
@@ -24,37 +26,53 @@ def mask_fn(env: gym.Env):
     # If the env is wrapped in standard SB3 wrappers, we need to access the un-wrapped env
     return env.unwrapped.valid_action_mask()
 
+
+def _make_linear_schedule(start: float, end: float):
+    """SB3-compatible linear LR schedule.  progress_remaining: 1.0 → 0.0."""
+    def schedule(progress_remaining: float) -> float:
+        return end + (start - end) * progress_remaining
+    return schedule
+
+
 # ==========================================
 # 2. Main Training Loop
 # ==========================================
 def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     # --- Environment Setup ---
-    env = TetrisEnv(CONFIG, T_CONFIG)
-    env = ActionMasker(env, mask_fn)
+    if CONFIG.n_envs > 1:
+        env = DummyVecEnv([
+            lambda: ActionMasker(Monitor(TetrisEnv(CONFIG, T_CONFIG)), mask_fn)
+            for _ in range(CONFIG.n_envs)
+        ])
+    else:
+        env = TetrisEnv(CONFIG, T_CONFIG)
+        env = Monitor(env)
+        env = ActionMasker(env, mask_fn)
+
     eval_env = TetrisEnv(CONFIG, T_CONFIG)
     eval_env = ActionMasker(eval_env, mask_fn)
 
+    # --- Learning rate schedule ---
+    lr = _make_linear_schedule(CONFIG.learning_rate, CONFIG.lr_end)
+
     # --- Initialization / Resuming ---
-    if os.path.exists(CONFIG.final_model_path + ".zip"):
-        print(f"[*] Resuming training from existing model: {CONFIG.final_model_path}.zip")
-        # When loading, the policy architecture and kwargs are already saved inside the zip.
+    if os.path.exists(CONFIG.final_model_path):
+        print(f"[*] Resuming training from existing model: {CONFIG.final_model_path}")
         model = MaskablePPO.load(
             CONFIG.final_model_path, 
             env=env, 
             tensorboard_log=CONFIG.log_dir
         )
+        model.learning_rate = lr
     else:
         print("[*] Initializing fresh TurboMino model.")
         
-        # Inject our custom PyTorch architecture
         policy_kwargs = dict(
             features_extractor_class=TurboMino,
             features_extractor_kwargs=dict(
                 T_CONFIG=T_CONFIG,
                 CONFIG=CONFIG
             ),
-            # The extractor outputs the final logits (B, M), so we do not need 
-            # the default MLPs (pi and vf) to be massive.
             net_arch=dict(pi=CONFIG.net_arch, vf=CONFIG.net_arch)
         )
 
@@ -62,19 +80,21 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
             "MultiInputPolicy",
             env,
             policy_kwargs=policy_kwargs,
-            learning_rate=CONFIG.learning_rate,
-            n_steps=CONFIG.n_steps,          # Number of steps to collect before updating network
-            batch_size=CONFIG.batch_size,        # Minibatch size during network update
-            ent_coef=CONFIG.ent_coef,        # Entropy coefficient: encourages exploration to find combos/T-spins
-            gamma=CONFIG.gamma,            # Discount factor
+            learning_rate=lr,
+            n_steps=CONFIG.n_steps,
+            batch_size=CONFIG.batch_size,
+            ent_coef=CONFIG.ent_coef,
+            clip_range=CONFIG.clip_range,
+            gamma=CONFIG.gamma,
             tensorboard_log=CONFIG.log_dir,
-            verbose=0,                       # Suppress SB3's table dump; progress bar handles display
+            verbose=0,
         )
 
     # --- Callbacks ---
     progress_callback = ProgressBarCallback(
         total_timesteps=CONFIG.total_timesteps,
         n_steps=CONFIG.n_steps,
+        n_envs=CONFIG.n_envs,
     )
 
     checkpoint_callback = CheckpointCallback(
@@ -82,11 +102,18 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         save_path=CONFIG.checkpoint_dir,
         name_prefix="turbomino_ckpt"
     )
+
     validation_callback = TetrisValidationCallback(
         eval_env=eval_env,
-        eval_freq=CONFIG.save_freq,       # Run validation every 10,000 training steps
-        n_eval_episodes=CONFIG.eval_episodes,     # Average the score over 5 games for stability
-        max_pieces=CONFIG.max_eval_pieces         # Force stop at 100 pieces
+        eval_freq=CONFIG.save_freq,
+        n_eval_episodes=CONFIG.eval_episodes,
+        max_pieces=CONFIG.max_eval_pieces
+    )
+
+    ent_coef_callback = EntropyAnnealCallback(
+        start=CONFIG.ent_coef,
+        end=CONFIG.ent_coef_end,
+        total_timesteps=CONFIG.total_timesteps,
     )
 
     # --- Execution ---
@@ -94,16 +121,14 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     try:
         model.learn(
             total_timesteps=CONFIG.total_timesteps, 
-            callback=[progress_callback, checkpoint_callback, validation_callback],
-            # CRITICAL: Set to False so resuming doesn't overwrite your old TensorBoard charts
+            callback=[progress_callback, checkpoint_callback, validation_callback, ent_coef_callback],
             reset_num_timesteps=False 
         )
     except KeyboardInterrupt:
         print("\n[*] Training interrupted by user. Saving current state...")
     finally:
-        # Save the master file
         model.save(CONFIG.final_model_path)
-        print(f"[*] Model saved to {CONFIG.final_model_path}.zip")
+        print(f"[*] Model saved to {CONFIG.final_model_path}")
 
 
 class TetrisValidationCallback(BaseCallback):
@@ -117,7 +142,7 @@ class TetrisValidationCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         # Trigger evaluation every eval_freq steps
-        if self.n_calls % self.eval_freq == 0:
+        if self.n_calls % self.eval_freq == 0 and self.n_calls > 0:
             scores = []
             lines = []
             pieces = []
