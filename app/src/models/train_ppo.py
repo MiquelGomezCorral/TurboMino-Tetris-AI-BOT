@@ -11,7 +11,7 @@ from stable_baselines3.common.monitor import Monitor
 # Import your environment, configs, and neural network
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
-from src.models import TurboMino, TetrisEnv
+from src.models import TurboMinoEncoder, TetrisEnv
 from src.models.callbacks import ProgressBarCallback, EntropyAnnealCallback
 
 # ==========================================
@@ -37,7 +37,7 @@ def _make_linear_schedule(start: float, end: float):
 # ==========================================
 # 2. Main Training Loop
 # ==========================================
-def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+def train_ppo_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     # --- Environment Setup ---
     if CONFIG.n_envs > 1:
         env = DummyVecEnv([
@@ -68,7 +68,7 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         print("[*] Initializing fresh TurboMino model.")
         
         policy_kwargs = dict(
-            features_extractor_class=TurboMino,
+            features_extractor_class=TurboMinoEncoder,
             features_extractor_kwargs=dict(
                 T_CONFIG=T_CONFIG,
                 CONFIG=CONFIG

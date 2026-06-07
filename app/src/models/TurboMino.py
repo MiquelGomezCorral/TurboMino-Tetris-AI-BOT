@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange, reduce, repeat
 from torch import nn
+import pytorch_lightning as pl
 
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
@@ -175,7 +176,7 @@ class PieceEncoder(nn.Module):
 # ----------------------------------------------------------------------------- #
 #  Feature extractor                                                            #
 # ----------------------------------------------------------------------------- #
-class TurboMino(BaseFeaturesExtractor):
+class TurboMinoEncoder(BaseFeaturesExtractor):
     """Scores every candidate placement.
 
     Pipeline
@@ -287,3 +288,70 @@ class TurboMino(BaseFeaturesExtractor):
         values = self.placement_head(fused)                           # (B, M, 4)
         final_features = rearrange(values, "b m f -> b (m f)")        # (B, M * 4)            
         return final_features
+    
+
+
+# ----------------------------------------------------------------------------- #
+#  Pretrain module                                                            #
+# ----------------------------------------------------------------------------- #
+class TurboMinoModule(pl.LightningModule):
+    def __init__(self, CONFIG: Configuration, weights=None):
+        super().__init__()
+        self.CONFIG = CONFIG
+        self.model = TurboMinoEncoder(CONFIG)
+
+        self.criterion = torch.nn.CrossEntropyLoss(
+            label_smoothing=CONFIG.label_smoothing 
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
+    def _shared_step(self, batch, stage: str):
+        x, y = batch
+        logits = self(x)
+        loss = self.criterion(logits, y)
+        preds = torch.argmax(logits, dim=1)
+        acc = (preds == y).float().mean()
+
+        self.log(f"{stage}_loss", loss, prog_bar=True, on_epoch=True, on_step=False)
+        self.log(f"{stage}_acc", acc, prog_bar=True, on_epoch=True, on_step=False)
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        return self._shared_step(batch, stage="train")
+
+    def validation_step(self, batch, batch_idx):
+        self._shared_step(batch, stage="val")
+
+    def configure_optimizers(self):
+        # optimizer = torch.optim.SGD(
+        #     self.parameters(),
+        #     lr=self.CONFIG.learning_rate,
+        #     momentum=self.CONFIG.momentum,
+        #     weight_decay=self.CONFIG.weight_decay,
+        #     nesterov=True,
+        # )
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.CONFIG.learning_rate,
+            weight_decay=self.CONFIG.weight_decay,
+        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=self.CONFIG.epochs,      # restart every N epochs
+            eta_min=self.CONFIG.eta_min, # minimum lr
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_acc",
+                "interval": "epoch",
+                "frequency": 1,
+                "strict": True,
+            },
+        }
+    def is_symmetric(self):
+        return self.model.symmetric

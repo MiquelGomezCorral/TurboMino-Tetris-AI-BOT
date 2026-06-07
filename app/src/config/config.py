@@ -25,6 +25,7 @@ class Configuration:
     config: str = None
 
     raw_dataset_path: str = os.path.join(DATA_PATH, "data.csv")
+    processed_dataset_path: str = os.path.join(DATA_PATH, "processed_dataset.csv")
 
     checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints")
     log_dir: str = os.path.join(LOGS_PATH, f"tensorboard_{exp_name}")
@@ -36,9 +37,12 @@ class Configuration:
     # ===================================================================
 
     seed:     int = 42
-    gym_id:          str = None
-    total_timesteps: int = 25_000
+    test_size: float = 0.2
+    val_size:  float = 0.1
 
+    gym_id:          str = None
+    
+    total_timesteps: int = 25_000
     max_placements: int = 128
     d_model: int = 64
     n_heads: int = 4

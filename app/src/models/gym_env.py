@@ -1,7 +1,6 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from einops import rearrange
 
 from maikol_utils.print_utils import print_warn
 
@@ -19,6 +18,8 @@ class TetrisEnv(gym.Env):
         assert self.CONFIG.max_board_size_w >= self.T_CONFIG.board_w, "CONFIG.max_board_size_w must be >= T_CONFIG.board_w"
 
         self.evaluator = HeuristicEvaluator()
+        self.game = Tetris(width=self.T_CONFIG.board_w, height=self.T_CONFIG.board_h)
+        self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG)
 
         # 1. Action Space: Select an index from 0 to MAX_PLACEMENTS - 1
         self.action_space = spaces.Discrete(CONFIG.max_placements)
@@ -59,17 +60,19 @@ class TetrisEnv(gym.Env):
 
 
     def step(self, action):
-        # 1. Execute the sequence chosen by the neural network
+        # =========== 1. Execute the sequence chosen by the neural network =========== 
         chosen_placement, _ = self.all_placements[action]
         
         reward = self.game.get_score()
         for act in chosen_placement['sequence']:
             self.game.move_active_piece(act)
-        # 2. Check Game Over
+
+        # ===========  2. Check Game Over =========== 
         terminated = self.game.is_game_over()
         truncated = False
 
-        # 2. Calculate Reward
+
+        # ===========  3. Calculate Reward =========== 
         if terminated:
             # Penalize death — large negative reward so the model learns to survive
             reward = self.T_CONFIG.death_penalty
@@ -81,7 +84,7 @@ class TetrisEnv(gym.Env):
             reward = np.sign(reward) * np.sqrt(np.abs(reward)) / 10.0
 
         
-        # 4. Get next states
+        # ===========  4. Get next states =========== 
         obs = self._get_obs()
         
         return obs, reward, terminated, truncated, {}
@@ -92,99 +95,17 @@ class TetrisEnv(gym.Env):
         
         # Initialize your engine
         self.game = Tetris(width=self.T_CONFIG.board_w, height=self.T_CONFIG.board_h)
-        self.searcher = MoveSearcher(self.game)
+        self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG)
         
         obs = self._get_obs()
         return obs, {}
 
     
-    def _get_one_hot(self, piece_val):
-        arr = np.zeros(self.T_CONFIG.num_piece_categories, dtype=np.float32)
-        arr[piece_val] = 1.0
-        return arr
-    
-
-    def _build_single_queue_context(self, active_val: int, hold_val: int, upcoming_vals: list[int]) -> np.ndarray:
-        """Helper to build the (S, C) one-hot context matrix for a specific scenario."""
-        context_list = [
-            self._get_one_hot(active_val),
-            self._get_one_hot(hold_val)
-        ]
-        
-        for i in range(self.T_CONFIG.max_pieces_on_queue_view):
-            val = upcoming_vals[i] if i < len(upcoming_vals) else PieceEnum.N.value
-            context_list.append(self._get_one_hot(val))
-            
-        return np.array(context_list, dtype=np.float32)
-
     def _get_obs(self):
-        # ========== 1. Ask the MoveSearcher for all valid placements ========== 
-        active_piece_type = self.game.get_active_piece_type()
-        hold_piece_type, had_hold = self.game.get_hold_or_next_piece_type()
-
-        active_placements = self.searcher.get_all_placements(piece_type=PieceEnum(active_piece_type), clear_lines=self.CONFIG.clear_lines_on_placement)
-        hold_placements = self.searcher.get_all_placements(piece_type=PieceEnum(hold_piece_type), clear_lines=self.CONFIG.clear_lines_on_placement, prepend_hold=True)
-
-        # ==========  2. Build the two unique queue contexts ========== 
-        queue_list = self.game.get_queue() 
-        
-        # A. Active Queue Scenario
-        active_q_matrix = self._build_single_queue_context(
-            active_val=active_piece_type,
-            hold_val=hold_piece_type,
-            upcoming_vals=queue_list
-        )
-        
-        # B. Hold Queue Scenario
-        hold_q_matrix = self._build_single_queue_context(
-            active_val=hold_piece_type,
-            hold_val=active_piece_type,
-            # Normal swap
-            upcoming_vals=queue_list if had_hold else queue_list[1:]
-        )
-
-        # Stack into shape (2, S, C)
-        queues_tensor = np.stack([active_q_matrix, hold_q_matrix])
-
-
-
-        # ========== 3. Combine Placements and Build Boards & Mapping ========== 
-        self.all_placements = []
-        boards_matrix = np.zeros((
-            self.CONFIG.max_placements,
-            self.CONFIG.max_board_size_h + self.T_CONFIG.vanish_zone,
-            self.CONFIG.max_board_size_w
-        ), dtype=np.float32)
-        
-        queue_idx_matrix = np.zeros(self.CONFIG.max_placements, dtype=np.int64)
-
-        pad_h = max(0, self.CONFIG.max_board_size_h - (self.T_CONFIG.board_h + self.T_CONFIG.vanish_zone))
-        pad_left = max(0, (self.CONFIG.max_board_size_w - self.T_CONFIG.board_w) // 2)
-        pad_right = max(0, self.CONFIG.max_board_size_w - self.T_CONFIG.board_w - pad_left)
-
-        # Merge active and hold placements, tagging them with their queue index
-        # 0 = Active, 1 = Hold
-        placements_to_process = [(p, 0) for p in active_placements] + [(p, 1) for p in hold_placements]
-
-        for i, (placement, q_idx) in enumerate(placements_to_process):
-            if i >= self.CONFIG.max_placements:
-                print_warn(f"Number of placements ({len(placements_to_process)}) exceeds CONFIG.max_placements ({self.CONFIG.max_placements}). Truncating extra placements. Increase CONFIG.max_placements to capture more.")
-                break
-                
-            grid = self._extract_features_2d(placement['bitmap'])
-            boards_matrix[i] = np.pad(grid, ((0, pad_h), (pad_left, pad_right)), constant_values=1)
-            queue_idx_matrix[i] = q_idx
-            
-            # Save to unified list for the step() function to execute later
-            self.all_placements.append((placement, q_idx))
-
-        # 4. Return the Dictionary
-        return {
-            "boards": boards_matrix,
-            "queues": queues_tensor,
-            "queue_idx": queue_idx_matrix,
-            "placement_mask": self.valid_action_mask()
-        }
+        """Generates the observation dictionary containing board states for all placements and their corresponding queue contexts."""
+        all_placements, features_dict = self.searcher.get_all_features()
+        self.all_placements = all_placements # Store for step() to reference
+        return features_dict
     
 
     def valid_action_mask(self):
@@ -193,45 +114,4 @@ class TetrisEnv(gym.Env):
         It returns a boolean array shape (MAX_PLACEMENTS,).
         True = Valid Move | False = Padded/Illegal Move
         """
-        num_valid = len(self.all_placements)
-        mask = np.zeros(self.CONFIG.max_placements, dtype=bool)
-        mask[:num_valid] = True
-        return mask
-
-
-    def _extract_features(self, bitmap_array: np.ndarray) -> np.ndarray:
-        # 1. Create a 1D array of bit-shifts for each column (0 to width-1)
-        # If column 0 is the highest bit (MSB), use: self.T_CONFIG.board_w - 1 - np.arange(self.T_CONFIG.board_w)
-        # If column 0 is the lowest bit (LSB), use: np.arange(self.T_CONFIG.board_w)
-        shifts = np.arange(self.T_CONFIG.board_w, dtype=np.uint32)
-        
-        # 2. Use broadcasting to shift every row's bits and check the lowest bit (& 1)
-        # bitmap_array[:, None] reshapes to (height, 1)
-        # shifts[None, :] reshapes to (1, width)
-        # Resulting matrix shape: (height, width)
-        unpacked_2d = (bitmap_array[:, None] >> shifts) & 1
-        
-        # 3. Flatten and cast directly to float32 for your Neural Network
-        return unpacked_2d.ravel().astype(np.float32)
-
-
-    def _extract_features_2d(self, bitmap_array: np.ndarray) -> np.ndarray:
-        """
-        Unpacks a 1D array of bitmasks into a clean 2D float32 grid.
-        Input shape: (board_h,)
-        Output shape: (board_h, board_w)
-        """
-        shifts = np.arange(self.T_CONFIG.board_w, dtype=np.uint32)
-        
-        # Explicitly project 1D rows into a 2D grid setup along the horizontal axis
-        expanded_rows = rearrange(bitmap_array, 'h -> h 1')
-        
-        # Bitwise shift and mask out individual cell bits
-        unpacked_2d = (expanded_rows >> shifts) & 1
-        
-        return unpacked_2d.astype(np.float32)
-    
-
-    def _calculate_reward(self, lines: int) -> float:
-        # Reward shaping (e.g., lines cleared, surviving, penalizing holes)
-        return float(lines)
+        return self.searcher.valid_action_mask()

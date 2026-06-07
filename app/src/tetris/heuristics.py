@@ -30,7 +30,7 @@ class HeuristicsResult(NamedTuple):
         'pit_hole_percent': -0.5,
         'deepest_well': 0.5,
 
-        'total': 1,  # Optional: weight for the total score itself if you want to include it
+        'total': 0.5,  # Optional: weight for the total score itself if you want to include it
     }
 
     def __str__(self):

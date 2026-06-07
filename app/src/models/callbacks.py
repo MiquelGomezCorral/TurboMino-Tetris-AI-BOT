@@ -1,5 +1,7 @@
 from tqdm import tqdm
 from stable_baselines3.common.callbacks import BaseCallback
+import numpy as np
+import time
 
 
 class ProgressBarCallback(BaseCallback):
@@ -9,8 +11,10 @@ class ProgressBarCallback(BaseCallback):
         self.n_steps = n_steps
         self.n_envs = n_envs
         self.last_update = 0
+        self._start_time = None
 
     def _on_training_start(self):
+        self._start_time = time.time()
         self.pbar = tqdm(
             total=self.total,
             unit="st",
@@ -21,27 +25,32 @@ class ProgressBarCallback(BaseCallback):
     def _on_step(self):
         self.pbar.update(self.n_envs)
         n = self.num_timesteps
-        # Update postfix at rollout boundaries (after train() ran)
         if n - self.last_update >= self.n_steps:
             self.last_update = n
-            self._postfix_from_logger()
+            self._update_postfix()
         return True
 
     def _on_rollout_end(self):
         it = getattr(self.model, "_n_updates", 0) + 1
         self.pbar.set_description(f"Iter {it}")
-        self._postfix_from_logger()
+        self._update_postfix()
 
-    def _postfix_from_logger(self):
+    def _update_postfix(self):
         log = self.logger.name_to_value if hasattr(self.logger, "name_to_value") else {}
-        if not log:
-            return
+        buf = self.model.ep_info_buffer if self.model.ep_info_buffer else []
+
+        rew = np.mean([e["r"] for e in buf]) if buf else 0.0
+        length = np.mean([e["l"] for e in buf]) if buf else 0.0
+
+        elapsed = time.time() - self._start_time if self._start_time else 1.0
+        fps = int(self.num_timesteps / elapsed) if elapsed > 0 else 0
+
         pc = {
-            "rew": f"{log.get('rollout/ep_rew_mean', 0):.1f}",
-            "len": f"{log.get('rollout/ep_len_mean', 0):.1f}",
+            "rew": f"{rew:.1f}",
+            "len": f"{length:.1f}",
             "loss": f"{log.get('train/loss', 0):.1f}",
             "kl": f"{log.get('train/approx_kl', 0):.4f}",
-            "fps": f"{log.get('time/fps', 0):.0f}",
+            "fps": f"{fps}",
         }
         if "val/mean_score" in log:
             pc["val"] = f"{log['val/mean_score']:.1f}"

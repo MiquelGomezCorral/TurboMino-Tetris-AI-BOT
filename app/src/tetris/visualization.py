@@ -10,8 +10,8 @@ class TetrisConfiguration:
     board_w: int = 10
     board_h: int = 20
     vanish_zone: int = 4
-    death_penalty: int = -100
-    alive_bonus: int = 0
+    death_penalty: int = -0.5
+    alive_bonus: int = 1
     max_pieces_on_queue_view: int = 5
     max_pieces_in_view: int = max_pieces_on_queue_view + 2 # + Hold + Active
     num_piece_categories: int = len(PieceEnum) - 1

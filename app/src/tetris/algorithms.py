@@ -1,12 +1,22 @@
-from collections import deque
 import numpy as np
+from einops import rearrange
+from collections import deque
+
+from maikol_utils.print_utils import print_warn
+
+
+from src.config import Configuration
 from .tetris import ActionEnum, Board, ActivePiece, PieceEnum, RotationEnum, Tetris, _clear_bitmap
+from .visualization import TetrisConfiguration
 
 
 class MoveSearcher:
-    def __init__(self, game: Tetris = None):
+    def __init__(self, game: Tetris = None, CONFIG: Configuration = None, T_CONFIG: TetrisConfiguration = None):
         self.game = game
-    def get_all_placements(self, piece_type: PieceEnum = None, board: Board = None, clear_lines: bool = False, prepend_hold: bool = False) -> list[dict]:
+        self.CONFIG = CONFIG
+        self.T_CONFIG = T_CONFIG
+    
+    def get_all_placements(self, piece_type: PieceEnum = None, prepend_hold: bool = False) -> list[dict]:
         """
         Finds all valid unique piece placement lock positions.
         Returns a list of dictionaries containing:
@@ -20,8 +30,7 @@ class MoveSearcher:
 
         if piece_type is None:
             piece_type = self.game.active_piece.type
-        if board is None:
-            board = self.game.board
+        board = self.game.board
 
         # 1. Initialize piece at spawn to find starting parameters
         spawn_piece = ActivePiece(piece_type, board.width, board.visible_height)
@@ -57,7 +66,7 @@ class MoveSearcher:
                             new_b_rows[by] |= shifted_mask
 
                     # Store using the footprint as the deduplication key
-                    if clear_lines:
+                    if self.CONFIG.clear_lines_on_placement:
                         new_b_rows, lines_cleared = _clear_bitmap(new_b_rows, board.width, board.visible_height)
                     else:
                         lines_cleared = 0
@@ -104,3 +113,146 @@ class MoveSearcher:
                         queue.append((*next_state, path + (action,)))
 
         return list(placements.values())
+    
+        
+    def _get_one_hot(self, piece_val):
+        """Converts a piece value into a one-hot encoded vector of length num_piece_categories."""
+        arr = np.zeros(self.T_CONFIG.num_piece_categories, dtype=np.float32)
+        arr[piece_val] = 1.0
+        return arr
+    
+
+    def _build_single_queue_context(self, active_val: int, hold_val: int, upcoming_vals: list[int]) -> np.ndarray:
+        """Helper to build the (S, C) one-hot context matrix for a specific scenario."""
+        context_list = [
+            self._get_one_hot(active_val),
+            self._get_one_hot(hold_val)
+        ]
+        
+        for i in range(self.T_CONFIG.max_pieces_on_queue_view):
+            val = upcoming_vals[i] if i < len(upcoming_vals) else PieceEnum.N.value
+            context_list.append(self._get_one_hot(val))
+            
+        return np.array(context_list, dtype=np.float32)
+
+    def get_all_features(self) -> dict:
+        """Combines placements, board states, and queue contexts into a unified observation dictionary for the model.
+            Returns a dictionary with:
+                - 'boards': (P, H, W) tensor of board states for each placement
+                - 'queues': (2, S, C) tensor of one-hot encoded queue contexts for active and hold scenarios
+                - 'queue_idx': (P,) array indicating which queue context applies to each placement
+                - 'placement_mask': (P,) binary mask indicating valid placements (for padding purposes)
+        
+        """
+        # ========== 1. Ask the MoveSearcher for all valid placements ========== 
+        active_piece_type = self.game.get_active_piece_type()
+        hold_piece_type, had_hold = self.game.get_hold_or_next_piece_type()
+
+        active_placements = self.get_all_placements(piece_type=PieceEnum(active_piece_type))
+        hold_placements = self.get_all_placements(piece_type=PieceEnum(hold_piece_type), prepend_hold=True)
+
+        # ==========  2. Build the two unique queue contexts ========== 
+        queue_list = self.game.get_queue() 
+        
+        # A. Active Queue Scenario
+        active_q_matrix = self._build_single_queue_context(
+            active_val=active_piece_type,
+            hold_val=hold_piece_type,
+            upcoming_vals=queue_list
+        )
+        
+        # B. Hold Queue Scenario
+        hold_q_matrix = self._build_single_queue_context(
+            active_val=hold_piece_type,
+            hold_val=active_piece_type,
+            # Normal swap
+            upcoming_vals=queue_list if had_hold else queue_list[1:]
+        )
+
+        # Stack into shape (2, S, C)
+        queues_tensor = np.stack([active_q_matrix, hold_q_matrix])
+
+
+
+        # ========== 3. Combine Placements and Build Boards & Mapping ========== 
+        self.all_placements = []
+        boards_matrix = np.zeros((
+            self.CONFIG.max_placements,
+            self.CONFIG.max_board_size_h + self.T_CONFIG.vanish_zone,
+            self.CONFIG.max_board_size_w
+        ), dtype=np.float32)
+        
+        queue_idx_matrix = np.zeros(self.CONFIG.max_placements, dtype=np.int64)
+
+        pad_h = max(0, self.CONFIG.max_board_size_h - (self.T_CONFIG.board_h + self.T_CONFIG.vanish_zone))
+        pad_left = max(0, (self.CONFIG.max_board_size_w - self.T_CONFIG.board_w) // 2)
+        pad_right = max(0, self.CONFIG.max_board_size_w - self.T_CONFIG.board_w - pad_left)
+
+        # Merge active and hold placements, tagging them with their queue index
+        # 0 = Active, 1 = Hold
+        placements_to_process = [(p, 0) for p in active_placements] + [(p, 1) for p in hold_placements]
+
+        for i, (placement, q_idx) in enumerate(placements_to_process):
+            if i >= self.CONFIG.max_placements:
+                print_warn(f"Number of placements ({len(placements_to_process)}) exceeds CONFIG.max_placements ({self.CONFIG.max_placements}). Truncating extra placements. Increase CONFIG.max_placements to capture more.")
+                break
+                
+            grid = self._extract_features_2d(placement['bitmap'])
+            boards_matrix[i] = np.pad(grid, ((0, pad_h), (pad_left, pad_right)), constant_values=1)
+            queue_idx_matrix[i] = q_idx
+            
+            # Save to unified list for the step() function to execute later
+            self.all_placements.append((placement, q_idx))
+
+        # 4. Return the Dictionary
+        return self.all_placements, {
+            "boards": boards_matrix,
+            "queues": queues_tensor,
+            "queue_idx": queue_idx_matrix,
+            "placement_mask": self.valid_action_mask()
+        }
+    
+
+    def _extract_features(self, bitmap_array: np.ndarray) -> np.ndarray:
+        # 1. Create a 1D array of bit-shifts for each column (0 to width-1)
+        # If column 0 is the highest bit (MSB), use: self.T_CONFIG.board_w - 1 - np.arange(self.T_CONFIG.board_w)
+        # If column 0 is the lowest bit (LSB), use: np.arange(self.T_CONFIG.board_w)
+        shifts = np.arange(self.T_CONFIG.board_w, dtype=np.uint32)
+        
+        # 2. Use broadcasting to shift every row's bits and check the lowest bit (& 1)
+        # bitmap_array[:, None] reshapes to (height, 1)
+        # shifts[None, :] reshapes to (1, width)
+        # Resulting matrix shape: (height, width)
+        unpacked_2d = (bitmap_array[:, None] >> shifts) & 1
+        
+        # 3. Flatten and cast directly to float32 for your Neural Network
+        return unpacked_2d.ravel().astype(np.float32)
+
+
+    def _extract_features_2d(self, bitmap_array: np.ndarray) -> np.ndarray:
+        """
+        Unpacks a 1D array of bitmasks into a clean 2D float32 grid.
+        Input shape: (board_h,)
+        Output shape: (board_h, board_w)
+        """
+        shifts = np.arange(self.T_CONFIG.board_w, dtype=np.uint32)
+        
+        # Explicitly project 1D rows into a 2D grid setup along the horizontal axis
+        expanded_rows = rearrange(bitmap_array, 'h -> h 1')
+        
+        # Bitwise shift and mask out individual cell bits
+        unpacked_2d = (expanded_rows >> shifts) & 1
+        
+        return unpacked_2d.astype(np.float32)
+    
+
+    def valid_action_mask(self):
+        """
+        CRITICAL METHOD: sb3-contrib looks for this exact function name.
+        It returns a boolean array shape (MAX_PLACEMENTS,).
+        True = Valid Move | False = Padded/Illegal Move
+        """
+        num_valid = len(self.all_placements)
+        mask = np.zeros(self.CONFIG.max_placements, dtype=bool)
+        mask[:num_valid] = True
+        return mask

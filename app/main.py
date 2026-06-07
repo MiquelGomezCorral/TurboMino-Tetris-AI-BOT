@@ -8,7 +8,7 @@ from maikol_utils.other_utils import args_to_dataclass
 from maikol_utils.print_utils import print_separator
 
 from scripts import play_tetris_game, showcase_model
-from src.models import train_turbomino
+from src.models import train_ppo_turbomino
 
 def cmd_play_tetris(args: argparse.Namespace):
     """Call play_tetris_from_config_list with the given args."""
@@ -21,7 +21,7 @@ def cmd_train(args):
     """Call training functions."""
     CONFIG: Configuration = args_to_dataclass(args, Configuration)
     T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
-    train_turbomino(CONFIG, T_CONFIG)
+    train_ppo_turbomino(CONFIG, T_CONFIG)
 
 def cmd_showcase(args):
     """Call showcase functions."""

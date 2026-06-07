@@ -409,7 +409,6 @@ class Board:
             c_board = self.c_rows
 
         if self.color_map:
-            print('2')
             for y in reversed(range(row_count)):
                 line = ''
                 for x in range(self.width):
@@ -420,7 +419,7 @@ class Board:
                         if active_piece:
                             ly = y - active_piece.y
                             lx = x - active_piece.x
-                            if 0 <= ly < 4 and 0 <= lx < 4:
+                            if 0 <= ly < len(active_piece.current_mask) and 0 <= lx < 4:
                                 from_active = bool(active_piece.current_mask[ly] & (1 << lx))
                         line += active_piece.type.name if from_active else '.'
                 print(line)
@@ -468,6 +467,9 @@ class Tetris:
     ):
         self.width = width
         self.height = height
+        self.vanish_zone = vanish_zone
+        self.color_map = color_map
+
         self.board = Board(width, height, vanish_zone, color_map, playfield)
         self.queue = Queue(next_pieces)
 
@@ -585,9 +587,9 @@ class Tetris:
             return self.get_next_piece_type(), False
 
     def print_state(self, include_vanish_zone=False):
-        print("Current Board:")
+        # print("Current Board:")
         self.board.print_board(active_piece=self.active_piece, include_vanish_zone=include_vanish_zone)
         print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
-        print(f"Next Piece: {self.queue.peek_piece().name}")
+        print(f"Next Piece: {[p.name for p in self.queue.get_queue()]}")
         print(f"Hold Piece: {self.hold_piece.name if self.hold_piece else 'None'}")
         print(f"Can Hold: {self.can_hold}")
