@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "skills": {
+    "mastering-pytorch-rl-nlp": {
+      "source": "SpillwaveSolutions/mastering-pytorch-rl-nlp-agentic-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "33454ece0d3e083c1668ddaccbaaebcd024db9b5fcc5d47c9ad93cac442672e6"
+    },
+    "python-executor": {
+      "source": "inferen-sh/skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "bd2d874c27788964fadf03c0840049de0409407f06f883ee90886164cb22ef69"
+    },
+    "python-testing-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "autoskills-registry",
+      "computedHash": "07b87d62993c0b6159a91d18fc8723b7f4c13d5000c0984266c207493ce641ff"
+    },
+    "pytorch": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "skillPath": "pytorch/SKILL.md",
+      "computedHash": "5d8381ff898fc647431c4b64ebdcee7d08c5068fb174500780cf8ae3bd61b4d9"
+    },
+    "stable-baselines3": {
+      "source": "K-Dense-AI/claude-scientific-skills",
+      "sourceType": "github",
+      "skillPath": "skills/stable-baselines3/SKILL.md",
+      "computedHash": "e491150e00d1e042260faad52c102133e9d96faa93fc4e775c2f87082ceb9acf"
+    }
+  }
+}
