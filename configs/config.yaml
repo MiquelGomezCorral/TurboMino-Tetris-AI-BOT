@@ -13,3 +13,5 @@ verbose: 0
 save_freq: 50000
 
 total_timesteps: 5000000
+
+clear_lines_on_placement: true

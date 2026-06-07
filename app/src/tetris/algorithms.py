@@ -6,7 +6,7 @@ from .tetris import ActionEnum, Board, ActivePiece, PieceEnum, RotationEnum, Tet
 class MoveSearcher:
     def __init__(self, game: Tetris = None):
         self.game = game
-    def get_all_placements(self, piece_type: PieceEnum = None, board: Board = None, clear_lines: bool = True, prepend_hold: bool = False) -> list[dict]:
+    def get_all_placements(self, piece_type: PieceEnum = None, board: Board = None, clear_lines: bool = False, prepend_hold: bool = False) -> list[dict]:
         """
         Finds all valid unique piece placement lock positions.
         Returns a list of dictionaries containing:

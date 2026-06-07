@@ -64,6 +64,8 @@ class Configuration:
 
     total_timesteps: int = 5_000_000
 
+    clear_lines_on_placement: bool = True
+
 
     def __post_init__(self):
         if self.config:
