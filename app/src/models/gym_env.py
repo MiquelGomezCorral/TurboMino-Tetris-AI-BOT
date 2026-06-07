@@ -74,7 +74,7 @@ class TetrisEnv(gym.Env):
         else: 
             reward = self.game.get_score() - reward + self.T_CONFIG.alive_bonus # Reward is the score difference after the move
             if reward > 0:
-                reward = np.log1p(reward) / 8.0
+                reward = np.sqrt(reward) / 10.0
             else:
                 reward = float(reward)
 
