@@ -39,8 +39,8 @@ class ScoringSystem:
         self.last_move_name = self._compute_move_name(lines, spin, perfect_clear)
 
         if lines == 0:
-            if spin != SpinType.NONE:
-                self.score += (400 if spin == SpinType.REGULAR else 100) * self.level
+            # if spin != SpinType.NONE:
+                # self.score += (400 if spin == SpinType.REGULAR else 100) * self.level
             self.combo = -1
             return
 

@@ -10,6 +10,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from src.models import TurboMino, TetrisEnv
+from src.models.callbacks import ProgressBarCallback
 
 # ==========================================
 # 1. Masking Wrapper Function
@@ -54,7 +55,7 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
             ),
             # The extractor outputs the final logits (B, M), so we do not need 
             # the default MLPs (pi and vf) to be massive.
-            net_arch=CONFIG.net_arch
+            net_arch=dict(pi=CONFIG.net_arch, vf=CONFIG.net_arch)
         )
 
         model = MaskablePPO(
@@ -67,10 +68,15 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
             ent_coef=CONFIG.ent_coef,        # Entropy coefficient: encourages exploration to find combos/T-spins
             gamma=CONFIG.gamma,            # Discount factor
             tensorboard_log=CONFIG.log_dir,
-            verbose=CONFIG.verbose
+            verbose=0,                       # Suppress SB3's table dump; progress bar handles display
         )
 
     # --- Callbacks ---
+    progress_callback = ProgressBarCallback(
+        total_timesteps=CONFIG.total_timesteps,
+        n_steps=CONFIG.n_steps,
+    )
+
     checkpoint_callback = CheckpointCallback(
         save_freq=CONFIG.save_freq,
         save_path=CONFIG.checkpoint_dir,
@@ -88,7 +94,7 @@ def train_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     try:
         model.learn(
             total_timesteps=CONFIG.total_timesteps, 
-            callback=[checkpoint_callback, validation_callback],
+            callback=[progress_callback, checkpoint_callback, validation_callback],
             # CRITICAL: Set to False so resuming doesn't overwrite your old TensorBoard charts
             reset_num_timesteps=False 
         )

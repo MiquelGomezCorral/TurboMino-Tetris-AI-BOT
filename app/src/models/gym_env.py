@@ -63,13 +63,21 @@ class TetrisEnv(gym.Env):
         reward = self.game.get_score()
         for act in chosen_placement['sequence']:
             self.game.move_active_piece(act)
-            
-        # 2. Calculate Reward
-        reward = self.game.get_score() - reward # Reward is the score difference after the move
-        
-        # 3. Check Game Over
-        terminated = self.game.is_game_over() # Implement this in your engine
+        # 2. Check Game Over
+        terminated = self.game.is_game_over()
         truncated = False
+
+        # 2. Calculate Reward
+        if terminated:
+            # Penalize death — large negative reward so the model learns to survive
+            reward = self.T_CONFIG.death_penalty
+        else: 
+            reward = self.game.get_score() - reward + self.T_CONFIG.alive_bonus # Reward is the score difference after the move
+            if reward > 0:
+                reward = np.log1p(reward) / 8.0
+            else:
+                reward = float(reward)
+
         
         # 4. Get next states
         obs = self._get_obs()

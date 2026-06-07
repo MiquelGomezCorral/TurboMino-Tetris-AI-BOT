@@ -40,25 +40,26 @@ class Configuration:
     total_timesteps: int = 25_000
 
     max_placements: int = 128
-    d_model: int = 128
+    d_model: int = 64
     n_heads: int = 4
-    head_hidden: int = 256
+    head_hidden: int = 128
     n_piece_layers: int = 2
     max_board_size_w: int = 10
     max_board_size_h: int = 20
 
 
 
-    net_arch: list[int] = field(default_factory=lambda: [128, 128])
+    net_arch: list[int] = field(default_factory=lambda: [64, 64])
+    features_per_placement: int = 4
     learning_rate: float = 3e-4
     n_steps: int = 2048
     batch_size: int = 256
-    ent_coef: float = 0.015
-    gamma: float = 0.99
-    verbose: int = 1
+    ent_coef: float = 0.005
+    gamma: float = 0.999
+    verbose: int = 0
 
-    save_freq: int = 10000
-    eval_episodes: int = 10
+    save_freq: int = 50_000
+    eval_episodes: int = 100
     max_eval_pieces: int = 100
 
     total_timesteps: int = 5_000_000

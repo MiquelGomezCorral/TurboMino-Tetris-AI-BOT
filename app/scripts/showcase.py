@@ -2,7 +2,8 @@ import os
 import time
 from sb3_contrib import MaskablePPO
 
-# Import your environment and configs
+from maikol_utils.print_utils import print_separator
+
 from src.models import TetrisEnv 
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
@@ -40,13 +41,11 @@ def showcase_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         game = env.unwrapped.game
         
         # Header Stats
-        print("="*30)
-        print(f"  AI TETRIS SHOWCASE  |  Pieces: {pieces_placed}")
-        print(f"  Score: {game.score_system.score}  |  Lines: {game.score_system.lines_cleared_total}  |  Level: {game.score_system.level}")
-        print("="*30)
-        
+        print_separator(f"AI TETRIS SHOWCASE  |  Pieces: {pieces_placed}", sep_type="SHORT")
+        print(f"Score: {game.score_system.score}  |  Lines: {game.score_system.lines_cleared_total}  |  Level: {game.score_system.level}")
+        print_separator("", sep_type="SHORT")
         # Print the board state
-        game.print_state(include_vanish_zone=False)
+        game.print_state(include_vanish_zone=True)
         
         # 1. Get the valid action mask for the current state
         action_masks = env.unwrapped.valid_action_mask()
@@ -67,9 +66,7 @@ def showcase_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     # --- 5. Game Over ---
     clear_terminal()
     game = env.unwrapped.game
-    print("="*30)
-    print("          GAME OVER")
-    print("="*30)
+    print_separator("GAME OVER", sep_type="START")
     game.print_state(include_vanish_zone=False)
     print("\nFinal Stats:")
     print(f"- Total Score: {game.score_system.score}")

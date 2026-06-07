@@ -504,7 +504,9 @@ class Tetris:
             spin = self.board.check_t_spin(self.active_piece, self.last_action_was_rotation, self.last_kick_index)
             cleared_lines = self.board.lock_piece(self.active_piece)
             perfect_clear = cleared_lines > 0 and all(self.board.b_rows[i] == 0 for i in range(self.board.visible_height))
+            
             self.score_system.evaluate_drop(cleared_lines, spin, perfect_clear, drop_distance, hard_drop=True)
+
             self.spawn_piece()
             self.can_hold = True
             self.last_action_was_rotation = False

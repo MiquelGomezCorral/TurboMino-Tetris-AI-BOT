@@ -201,9 +201,7 @@ class TurboMino(BaseFeaturesExtractor):
         T_CONFIG: TetrisConfiguration, 
         CONFIG: Configuration,
     ):
-        # We emit one value per placement, so that is our feature dimension.
-        super().__init__(observation_space, features_dim=CONFIG.max_placements)
-
+        super().__init__(observation_space, features_dim=CONFIG.max_placements * CONFIG.features_per_placement)
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
 
@@ -213,6 +211,7 @@ class TurboMino(BaseFeaturesExtractor):
         head_hidden = getattr(CONFIG, "head_hidden", 128)
 
         _, height, width = observation_space["boards"].shape
+
 
         self.board_encoder = BoardEncoder(height, width, d_model)
         self.piece_encoder = PieceEncoder(
@@ -234,7 +233,7 @@ class TurboMino(BaseFeaturesExtractor):
             nn.GELU(),
             nn.Linear(head_hidden, head_hidden),
             nn.GELU(),
-            nn.Linear(head_hidden, 1),
+            nn.Linear(head_hidden, CONFIG.features_per_placement),
         )
 
 
@@ -282,9 +281,9 @@ class TurboMino(BaseFeaturesExtractor):
 
         # 6. Fuse and Score
         fused = torch.cat([board_tok, b_from_p, p_summary], dim=-1)     # (B, M, 3d)
-        values = rearrange(self.placement_head(fused), "b m 1 -> b m")  # (B, M)
-
-        if key_mask is not None:
-            values = values.masked_fill(~key_mask, self.MASK_VALUE)
-            
-        return values
+        # values = rearrange(self.placement_head(fused), "b m 1 -> b m")  # (B, M)
+        # if key_mask is not None:
+            # values = values.masked_fill(~key_mask, self.MASK_VALUE)
+        values = self.placement_head(fused)                           # (B, M, 4)
+        final_features = rearrange(values, "b m f -> b (m f)")        # (B, M * 4)            
+        return final_features

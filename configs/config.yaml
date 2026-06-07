@@ -1,14 +1,15 @@
 exp_name: "basic_ppo"
 seed: 42
 
-net_arch:  [128, 128]
-learning_rate: 3e-4
+net_arch:  [128]
+features_per_placement: 4
+learning_rate: 0.0003
 n_steps: 2048
 batch_size: 256
-ent_coef: 0.015
+ent_coef: 0.005
 gamma: 0.99
-verbose: 1
+verbose: 0
 
-save_freq: 10000
+save_freq: 50000
 
 total_timesteps: 5000000
