@@ -113,3 +113,8 @@ class TetrisEnv(gym.Env):
         True = Valid Move | False = Padded/Illegal Move
         """
         return self.searcher.valid_action_mask()
+    
+
+    def get_game(self) -> Tetris:
+        """Returns the underlying Tetris game instance for rendering or analysis."""
+        return self.game

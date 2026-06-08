@@ -13,6 +13,7 @@ class ScoringSystem:
         self.combo = -1
         self.b2b_active = False
         self.last_move_name = ""
+        self.total_all_clears = 0
 
     def _compute_move_name(self, lines: int, spin: SpinType, perfect_clear: bool) -> str:
         parts = []
@@ -82,3 +83,5 @@ class ScoringSystem:
         self.score += (base + (50 * self.combo)) * self.level
         self.lines_cleared_total += lines
         self.level = (self.lines_cleared_total // 10) + 1
+        if perfect_clear:
+            self.total_all_clears += 1

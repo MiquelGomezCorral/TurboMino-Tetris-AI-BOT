@@ -33,16 +33,20 @@ def showcase_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     obs, _ = env.reset()
     done = False
     pieces_placed = 0
+    max_combo = 0
 
     while not done:
         clear_terminal()
         
         # Access the underlying engine to print the board
-        game = env.unwrapped.game
+        game = env.get_game()
         
         # Header Stats
         print_separator(f"AI TETRIS SHOWCASE  |  Pieces: {pieces_placed}", sep_type="SHORT")
-        print(f"Score: {game.score_system.score}  |  Lines: {game.score_system.lines_cleared_total}  |  Level: {game.score_system.level}")
+        print(f"Score: {game.score_system.score:<10}  |  Lines: {game.score_system.lines_cleared_total:<10}  |  Level: {game.score_system.level}") 
+        print(f"Combo: {game.score_system.combo if game.score_system.combo >= 0 else '---':<5}  |  B2B: {' ON' if game.score_system.b2b_active else 'OFF'} |  Last Move: {game.score_system.last_move_name if game.score_system.last_move_name else '---':<15} | Total All Clears: {game.score_system.total_all_clears: <5}")
+        if game.score_system.combo > max_combo:
+            max_combo = game.score_system.combo
         print_separator("", sep_type="SHORT")
         # Print the board state
         game.print_state(include_vanish_zone=True)
@@ -69,6 +73,8 @@ def showcase_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     print_separator("GAME OVER", sep_type="START")
     game.print_state(include_vanish_zone=False)
     print("\nFinal Stats:")
+    print(f"- Total All Clears: {game.score_system.total_all_clears: <5}")
+    print(f"- Max Combo: {max_combo if max_combo >= 0 else '---':<5}")
     print(f"- Total Score: {game.score_system.score}")
     print(f"- Lines Cleared: {game.score_system.lines_cleared_total}")
     print(f"- Pieces Placed: {pieces_placed}")
