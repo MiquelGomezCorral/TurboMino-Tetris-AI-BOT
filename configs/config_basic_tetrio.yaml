@@ -1,0 +1,33 @@
+exp_name: "basic_tetrio"
+seed: 42
+
+features_per_placement: 4
+
+learning_rate: 0.0001
+epochs: 100
+patience: 10
+label_smoothing: 0.1
+weight_decay: 0.0001
+eta_min: 0.00001
+batch_size: 256
+num_workers: 4
+
+#-----------------------------------------------------------------
+net_arch:  [128]
+learning_rate: 0.0001
+lr_end: 0.00001
+clip_range: 0.1
+n_steps: 6250
+batch_size: 256
+ent_coef: 0.005
+ent_coef_end: 0.001
+gamma: 0.99
+n_envs: 4
+verbose: 0
+
+save_freq: 25000
+
+total_timesteps: 5000000
+
+clear_lines_on_placement: true
+use_heuristic_rewards: true

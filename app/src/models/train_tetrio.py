@@ -5,12 +5,12 @@ import numpy as np
 from maikol_utils.print_utils import print_separator
 
 from src.data import load_tetrio_data
-from src.models import TurboMinoModule
+from src.models import TurboMinoModule, TetrisEnv
 from src.config import Configuration
-from src.tetris import TetrisConfiguration, TetrisEnv
+from src.tetris import TetrisConfiguration
 
 
-def train_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     """
     Train a tetrio classification model using the provided configuration.
     Args:
@@ -19,10 +19,16 @@ def train_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     """
     pl.seed_everything(CONFIG.seed, workers=True)
 
-    train_loader, test_loader, val_loader = load_tetrio_data(CONFIG, T_CONFIG)
+    print_separator("Loading Configuration", sep_type="SHORT")
+    CONFIG.print_config()
+    T_CONFIG.print_config()
 
+    train_loader, _, val_loader = load_tetrio_data(CONFIG, T_CONFIG)
+
+    print(" - Loading Environment")
     observation_space = TetrisEnv(CONFIG, T_CONFIG).observation_space
 
+    print(" - Loading Model")
     model = TurboMinoModule(CONFIG, T_CONFIG, observation_space)
 
     # ========================= STAGE 1: Train Classifier Only =========================
@@ -46,10 +52,10 @@ def train_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 
-    test_tetrio(CONFIG, T_CONFIG, checkpoint_path=trainer.checkpoint_callback.best_model_path)
+    test_tetrio_turbomino(CONFIG, T_CONFIG, checkpoint_path=trainer.checkpoint_callback.best_model_path)
 
 
-def test_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, checkpoint_path: str):
+def test_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, checkpoint_path: str):
     print_separator("Test Classifier", sep_type="SUPER")
     pl.seed_everything(CONFIG.seed, workers=True)
 

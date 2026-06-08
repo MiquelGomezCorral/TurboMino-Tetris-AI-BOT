@@ -230,7 +230,6 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         # To make markovian the combos done by the game
         self.game_state_proj = nn.Linear(2, d_model)
         
-        
         # Per-placement value head ('Oculto' MLP), shared across the M placements.
         self.feature_scale = nn.Parameter(torch.tensor(10.0))
         self.placement_head = nn.Sequential(

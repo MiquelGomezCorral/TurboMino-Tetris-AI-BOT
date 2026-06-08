@@ -19,8 +19,11 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, use_t
         Tuple: A tuple containing the training and testing data (x_train, x_test, y_train, y_test).
     """
     # ============== Load data ============== 
+    print(' - Loading Tetrio train...')
     df_train = pd.read_csv(CONFIG.tetrio_train)
+    print(' - Loading Tetrio test...')
     df_test = pd.read_csv(CONFIG.tetrio_test)
+    print(' - Loading Tetrio val...')
     df_val = pd.read_csv(CONFIG.tetrio_val)
 
     # ============== Create datasets dataloaders ==============
@@ -47,24 +50,6 @@ class TetrioDataset(Dataset):
 
     def __len__(self):
         return len(self.df)
-
-    def __getitem__(self, idx):
-        playfield_next = self.df.iloc[idx]['playfield_next']
-
-        game = Tetris(
-            playfield=self.df.iloc[idx]['playfield'],
-            next_pieces=self.df.iloc[idx]['next'],
-            active_piece=self.df.iloc[idx]['real_current'],
-            hold_piece=self.df.iloc[idx]['real_hold']
-        )
-
-        searcher = MoveSearcher(game, self.CONFIG, self.T_CONFIG)
-        _, features = searcher.get_all_features()
-
-        board = Board(game.width, game.height, game.vanish_zone, game.color_map, playfield_next)
-        idx = find_board_index(board, features['boards'])
-
-        return features, idx
     
     def __getitem__(self, row_idx):
         row = self.df.iloc[row_idx]
@@ -82,7 +67,7 @@ class TetrioDataset(Dataset):
         board = Board(game.width, game.height, game.vanish_zone, game.color_map, row['playfield_next'])
         target = find_board_index(board, features['boards'])
 
-        assert target != -1, f"Board not found in placements for row {row_idx}"
+        assert target != -1, f"Board not found in placements for row {row_idx}, {target=}"
 
         # Pad all variable-length tensors to max_placements
         M_actual = features['boards'].shape[0]
@@ -95,7 +80,6 @@ class TetrioDataset(Dataset):
         boards    = pad_first_dim(features['boards'],    M_max)        # (M, H, W)
         queues    = features['queues']                                 # (2, S, C) — not placement-dim
         queue_idx = pad_first_dim(features['queue_idx'], M_max)       # (M,)
-        heuristics = pad_first_dim(features['heuristics'], M_max)     # (M, h) if present
 
         # Mask: True = invalid (padded) slot
         placement_mask = np.zeros(M_max, dtype=np.float32)
@@ -105,7 +89,6 @@ class TetrioDataset(Dataset):
             "boards":          torch.from_numpy(boards).float(),
             "queues":          torch.from_numpy(queues).float(),
             "queue_idx":       torch.from_numpy(queue_idx).long(),
-            "heuristics":      torch.from_numpy(heuristics).float(),
             "placement_mask":  torch.from_numpy(placement_mask).float(),
         }
 

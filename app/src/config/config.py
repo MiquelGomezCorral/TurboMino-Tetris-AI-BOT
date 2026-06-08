@@ -27,6 +27,9 @@ class Configuration:
 
     raw_dataset_path: str = os.path.join(DATA_PATH, "data.csv")
     processed_dataset_path: str = os.path.join(DATA_PATH, "processed_dataset.csv")
+    tetrio_train: str = os.path.join(DATA_PATH, "tetrio_train.csv")
+    tetrio_test: str = os.path.join(DATA_PATH, "tetrio_test.csv")
+    tetrio_val: str = os.path.join(DATA_PATH, "tetrio_val.csv")
 
     pretrain_model_path: str = os.path.join(MODELS_PATH, "pretrain_model")
     checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints")
@@ -41,13 +44,15 @@ class Configuration:
     seed:     int = 42
     test_size: float = 0.2
     val_size:  float = 0.1
-
+    batch_size: int = 256
+    num_workers: int = 4
 
     epochs: int = 100
     patience: int = 10
     label_smoothing: float = 0.1
 
-
+    weight_decay: float = 1e-4
+    eta_min: float = 1e-5
     # ===================================================================
     #                       PARAMETER RL
     # ===================================================================
@@ -70,7 +75,6 @@ class Configuration:
     learning_rate: float = 3e-4
     lr_end: float = 1e-5
     n_steps: int = 2048
-    batch_size: int = 256
     ent_coef: float = 0.02
     ent_coef_end: float = 0.001
     clip_range: float = 0.2
