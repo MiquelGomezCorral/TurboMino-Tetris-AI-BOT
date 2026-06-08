@@ -226,7 +226,11 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         # The two cross-attention heads bridging the CNN and the piece embeddings.
         self.board_to_piece = TransformerBlock(d_model, n_heads)  # Q=board, KV=piece
         self.piece_to_board = TransformerBlock(d_model, n_heads)  # Q=piece, KV=board
-
+        
+        # To make markovian the combos done by the game
+        self.game_state_proj = nn.Linear(2, d_model)
+        
+        
         # Per-placement value head ('Oculto' MLP), shared across the M placements.
         self.feature_scale = nn.Parameter(torch.tensor(10.0))
         self.placement_head = nn.Sequential(
@@ -264,11 +268,21 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         # piece_tok_per_placement shape: (B, M, S, d)
         piece_tok_per_placement = piece_toks[batch_indices, queue_idx] 
 
+        # Game observation as a token so it adds to the board more info
+        gs = observations["game_state"]                          # (B, 2)
+        gs_tok = self.game_state_proj(gs)                        # (B, d)
+        gs_tok = gs_tok.unsqueeze(1)                             # (B, 1, d)
+        gs_tok_expanded = gs_tok.unsqueeze(1).expand(-1, M, -1, -1)  # (B, M, 1, d)
+
         # 4. Board -> Piece Cross-Attention (Isolated Tunnels)
         # We temporarily collapse (B, M) into a single batch dimension. 
         # This mathematically guarantees Placement X only attends to Queue X, with zero crosstalk.
         board_tok_flat = rearrange(board_tok, "b m d -> (b m) 1 d")
         piece_tok_flat = rearrange(piece_tok_per_placement, "b m s d -> (b m) s d")
+        piece_tok_flat = torch.cat([
+            piece_tok_flat,                                       # (B*M, S, d)
+            rearrange(gs_tok_expanded, "b m 1 d -> (b m) 1 d"),  # (B*M, 1, d)
+        ], dim=1)  
         
         b_from_p_flat = self.board_to_piece(board_tok_flat, piece_tok_flat)
         b_from_p = rearrange(b_from_p_flat, "(b m) 1 d -> b m d", b=B, m=M)
@@ -319,6 +333,7 @@ class TurboMinoModule(pl.LightningModule):
         self.classifier_head = nn.Linear(
             CONFIG.features_per_placement, 1  # applied per-placement, shared weights
         )
+        
 
         self.criterion = nn.CrossEntropyLoss(
             label_smoothing=getattr(CONFIG, "label_smoothing", 0.0)

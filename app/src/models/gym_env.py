@@ -45,6 +45,12 @@ class TetrisEnv(gym.Env):
                 shape=(CONFIG.max_placements,), 
                 dtype=np.int64
             ),
+            "game_state": spaces.Box(
+                low=np.array([0.0, 0.0]),
+                high=np.array([1.0, np.inf]),
+                shape=(2,),
+                dtype=np.float32
+            ),
             "placement_mask": spaces.Box(
                 low=0, high=1,
                 shape=(CONFIG.max_placements,),
@@ -103,6 +109,7 @@ class TetrisEnv(gym.Env):
         """Generates the observation dictionary containing board states for all placements and their corresponding queue contexts."""
         all_placements, features_dict = self.searcher.get_all_features()
         self.all_placements = all_placements # Store for step() to reference
+
         return features_dict
     
 

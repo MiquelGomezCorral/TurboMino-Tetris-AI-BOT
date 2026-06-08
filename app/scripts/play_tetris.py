@@ -152,16 +152,16 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
 
         # 5. Draw Stats (Level, Lines, Combo) under hold piece
         ss = game.score_system
-        if ss.combo < 0:
+        if ss.get_combo() < 0:
             combo_str = "---"
-        elif ss.combo == 0:
+        elif ss.get_combo() == 0:
             combo_str = "x1"
         else:
-            combo_str = f"x{ss.combo + 1}"
+            combo_str = f"x{ss.get_combo() + 1}"
         draw_text(CONFIG, screen, f"Level {ss.level}", CONFIG.hold_offset_x, 5)
         draw_text(CONFIG, screen, f"Lines {ss.lines_cleared_total}", CONFIG.hold_offset_x, 6)
         draw_text(CONFIG, screen, f"Combo {combo_str}", CONFIG.hold_offset_x, 7)
-        draw_text(CONFIG, screen, f"B2B active {'ON' if ss.b2b_active else 'OFF'}", CONFIG.hold_offset_x, 8)
+        draw_text(CONFIG, screen, f"B2B active {'ON' if ss.get_b2b_active() else 'OFF'}", CONFIG.hold_offset_x, 8)
         draw_text(CONFIG, screen, f'Move: {ss.last_move_name if ss.last_move_name else "---"}', CONFIG.hold_offset_x, 9)
 
         # 6. Draw Next Queue (Next 5 pieces)

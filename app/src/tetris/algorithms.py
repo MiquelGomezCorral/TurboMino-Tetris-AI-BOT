@@ -204,12 +204,18 @@ class MoveSearcher:
             # Save to unified list for the step() function to execute later
             self.all_placements.append((placement, q_idx))
 
+
         # 4. Return the Dictionary
         return self.all_placements, {
             "boards": boards_matrix,
             "queues": queues_tensor,
             "queue_idx": queue_idx_matrix,
-            "placement_mask": self.valid_action_mask()
+            "placement_mask": self.valid_action_mask(),
+            "game_state": np.array([
+                    float(self.game.get_b2b_active()),   # 0.0 or 1.0
+                    float(self.game.get_combo()),          # 0, 1, 2, ...
+                ], dtype=np.float32
+            )
         }
     
 

@@ -85,3 +85,9 @@ class ScoringSystem:
         self.level = (self.lines_cleared_total // 10) + 1
         if perfect_clear:
             self.total_all_clears += 1
+            
+    def get_combo(self):
+        return self.combo
+
+    def get_b2b_active(self):
+        return self.b2b_active

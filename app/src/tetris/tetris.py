@@ -576,6 +576,12 @@ class Tetris:
     def get_next_piece_type(self):
         return self.queue.peek_piece().value
     
+    def get_combo(self):
+        return self.score_system.get_combo()
+    
+    def get_b2b_active(self):
+        return self.score_system.get_b2b_active()
+    
     def get_hold_or_next_piece_type(self):
         """Returns the piece type that would be active if the player performs a hold action right now.
         If hold is available and there is a piece in hold, returns the hold piece type.
