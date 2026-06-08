@@ -595,7 +595,7 @@ class Tetris:
     def print_state(self, include_vanish_zone=False):
         # print("Current Board:")
         self.board.print_board(active_piece=self.active_piece, include_vanish_zone=include_vanish_zone)
-        print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
-        print(f"Next Piece: {[p.name for p in self.queue.get_queue()]}")
-        print(f"Hold Piece: {self.hold_piece.name if self.hold_piece else 'None'}")
-        print(f"Can Hold: {self.can_hold}")
+        # print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
+        print(f"Act.: {self.active_piece.type.name} | Hold: {self.hold_piece.name if self.hold_piece else 'N'} | Next: {[p.name for p in self.queue.get_queue()]}")
+        # print(f"Can Hold: {self.can_hold}")
+        print(f"Combo: {self.score_system.combo if self.score_system.combo >= 0 else '---':<5}  |  B2B: {' ON' if self.score_system.b2b_active else 'OFF'} |  Last Move: {self.score_system.last_move_name if self.score_system.last_move_name else '---':<15} | Total All Clears: {self.score_system.total_all_clears: <5}")

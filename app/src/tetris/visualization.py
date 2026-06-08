@@ -1,13 +1,15 @@
 import pygame
-from .tetris import PieceEnum
 from dataclasses import dataclass, field
+from maikol_utils.print_utils import print_separator
+
+from .tetris import PieceEnum
 
 
 @dataclass
 class TetrisConfiguration:
     # --- Settable from CLI ---
     cell_size: int = 30
-    board_w: int = 4
+    board_w: int = 10
     board_h: int = 20
     vanish_zone: int = 4
     death_penalty: int = -1
@@ -87,6 +89,11 @@ class TetrisConfiguration:
         content_rows = max(self.board_h + self.vanish_zone, self.min_content_rows)
         self.total_height = content_rows
         self.screen_height = content_rows * self.cell_size + self.bottom_padding_rows * self.cell_size
+
+    def print_config(self):
+        print_separator("TETRIS CONFIG", sep_type="SHORT")
+        for field_name, value in self.__dict__.items():
+            print(f"- {field_name}: {value}")
 
 
 def draw_cell(CONFIG: TetrisConfiguration, surface, x, y, color):

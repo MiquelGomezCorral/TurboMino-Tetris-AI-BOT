@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field
 
 from maikol_utils.file_utils import make_dirs
+from maikol_utils.print_utils import print_separator
 import yaml
 
 @dataclass 
@@ -116,3 +117,9 @@ class Configuration:
         for key, value in yaml_data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def print_config(self):
+        print_separator("NORMAL CONFIG", sep_type="SHORT")
+
+        for field_name, value in self.__dict__.items():
+            print(f"- {field_name}: {value}")

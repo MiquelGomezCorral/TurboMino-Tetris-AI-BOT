@@ -52,6 +52,9 @@ if __name__ == "__main__":
     #                                       train
     # ======================================================================================
     p_train = subparsers.add_parser("train", help="Train the model")
+    p_train.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
+    p_train.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
+    p_train.add_argument("-MP","--model_path", type=str, default=None, help="Path to the trained model checkpoint (default: None)")
     p_train.set_defaults(func=cmd_train)
 
 

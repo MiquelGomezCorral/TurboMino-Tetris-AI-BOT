@@ -7,12 +7,14 @@ from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
+from maikol_utils.print_utils import print_separator
 
 # Import your environment, configs, and neural network
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from src.models import TurboMinoEncoder, TetrisEnv
 from src.models.callbacks import ProgressBarCallback, EntropyAnnealCallback
+
 
 # ==========================================
 # 1. Masking Wrapper Function
@@ -38,6 +40,10 @@ def _make_linear_schedule(start: float, end: float):
 # 2. Main Training Loop
 # ==========================================
 def train_ppo_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+    print_separator("Starting PPO training for TurboMino...", sep_type="START")
+    CONFIG.print_config()
+    T_CONFIG.print_config()
+
     # --- Environment Setup ---
     if CONFIG.n_envs > 1:
         env = DummyVecEnv([

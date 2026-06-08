@@ -187,7 +187,6 @@ class MoveSearcher:
         pad_h = max(0, self.CONFIG.max_board_size_h - (self.T_CONFIG.board_h + self.T_CONFIG.vanish_zone))
         pad_left = max(0, (self.CONFIG.max_board_size_w - self.T_CONFIG.board_w) // 2)
         pad_right = max(0, self.CONFIG.max_board_size_w - self.T_CONFIG.board_w - pad_left)
-
         # Merge active and hold placements, tagging them with their queue index
         # 0 = Active, 1 = Hold
         placements_to_process = [(p, 0) for p in active_placements] + [(p, 1) for p in hold_placements]
