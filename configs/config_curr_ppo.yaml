@@ -1,4 +1,4 @@
-exp_name: "basic_ppo_4w_b2b_combo"
+exp_name: "config_curr_ppo"
 seed: 42
 
 net_arch:  [128]
@@ -22,8 +22,8 @@ clear_lines_on_placement: true
 use_heuristic_rewards: true
 
 # Uncomment to enable curriculum (board width progression):
-# curriculum:
-#   4: 1000000
-#   6: 1000000
-#   8: 1000000
-#   10: 2000000
+curriculum:
+  4: 1000000
+  6: 1000000
+  8: 1000000
+  10: 2000000

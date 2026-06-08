@@ -32,7 +32,7 @@ class Configuration:
     tetrio_val: str = os.path.join(DATA_PATH, "tetrio_val.csv")
 
     pretrain_model_path: str = os.path.join(MODELS_PATH, "pretrain_model")
-    checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints")
+    checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints", exp_name)
     log_dir: str = os.path.join(LOGS_PATH, f"tensorboard_{exp_name}")
     final_model_path: str = os.path.join(MODELS_PATH, f"tetris_turbomino_{exp_name}.zip")
 
@@ -91,6 +91,8 @@ class Configuration:
     clear_lines_on_placement: bool = True
     use_heuristic_rewards: bool = True
 
+    curriculum: dict = field(default_factory=dict)  # {board_w: timesteps}, e.g. {4: 1_000_000, 6: 1_000_000, 8: 1_000_000, 10: 2_000_000}
+
 
     def __post_init__(self):
         if self.config:
@@ -98,6 +100,7 @@ class Configuration:
 
         # Recompute paths (exp_name may have changed from YAML or CLI)
         self.log_dir = os.path.join(self.LOGS_PATH, f"tensorboard_{self.exp_name}")
+        self.checkpoint_dir = os.path.join(self.MODELS_PATH, "checkpoints", self.exp_name)
         self.final_model_path = os.path.join(self.MODELS_PATH, f"tetris_turbomino_{self.exp_name}.zip")
         if self.model_path is None:
             self.model_path = self.final_model_path
