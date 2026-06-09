@@ -1,3 +1,4 @@
+import os, glob
 import pandas as pd
 import numpy as np
 import torch
@@ -127,3 +128,64 @@ def find_board_index(board: Board, boards_batch: np.ndarray) -> int:
     
     indices = np.where(~diff)[0]
     return int(indices[0]) if len(indices) > 0 else -1
+
+
+# ========================================================
+#              Precomputed Dataset
+# ========================================================
+
+class PrecomputedTetrioDataset(Dataset):
+    def __init__(self, data_dir: str, CONFIG: Configuration):
+        self.data_dir = data_dir
+        self.CONFIG = CONFIG
+        self.paths = sorted(glob.glob(os.path.join(data_dir, '*', '*.npz')))
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, idx):
+        data = np.load(self.paths[idx])
+
+        boards     = data['boards']       # (M_actual, H, W)
+        queues     = data['queues']       # (2, S, C)
+        queue_idx  = data['queue_idx']    # (M_actual,)
+        game_state = data['game_state']   # (G,)
+        target     = int(data['target'])
+
+        M_actual = boards.shape[0]
+        M_max    = self.CONFIG.max_placements
+
+        def pad_first_dim(arr, max_len, pad_value=0.0):
+            pad = np.zeros((max_len - arr.shape[0], *arr.shape[1:]), dtype=arr.dtype)
+            return np.concatenate([arr, pad], axis=0)
+
+        boards    = pad_first_dim(boards, M_max)
+        queue_idx = pad_first_dim(queue_idx, M_max)
+
+        placement_mask = np.zeros(M_max, dtype=np.float32)
+        placement_mask[M_actual:] = 1.0
+
+        obs = {
+            "boards":          torch.from_numpy(boards).float(),
+            "queues":          torch.from_numpy(queues).float(),
+            "queue_idx":       torch.from_numpy(queue_idx).long(),
+            "game_state":      torch.from_numpy(game_state).float(),
+            "placement_mask":  torch.from_numpy(placement_mask).float(),
+        }
+
+        return obs, torch.tensor(target, dtype=torch.long)
+
+
+def load_precomputed_tetrio_data(CONFIG: Configuration):
+    print(' - Loading precomputed Tetrio train...')
+    train_dataset = PrecomputedTetrioDataset('data/precomputed/train', CONFIG)
+    print(' - Loading precomputed Tetrio test...')
+    test_dataset  = PrecomputedTetrioDataset('data/precomputed/test', CONFIG)
+    print(' - Loading precomputed Tetrio val...')
+    val_dataset   = PrecomputedTetrioDataset('data/precomputed/val', CONFIG)
+
+    train_loader = DataLoader(train_dataset, batch_size=CONFIG.batch_size, shuffle=True)
+    test_loader  = DataLoader(test_dataset,  batch_size=CONFIG.batch_size, shuffle=False)
+    val_loader   = DataLoader(val_dataset,   batch_size=CONFIG.batch_size, shuffle=False)
+
+    return train_loader, test_loader, val_loader
