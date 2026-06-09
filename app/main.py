@@ -82,7 +82,8 @@ if __name__ == "__main__":
     p_showcase = subparsers.add_parser("showcase", help="Showcase the trained model")
     p_showcase.add_argument("--exp_name", type=str, default="base_name", help="Experiment name for logging and model saving (default: base_name)")
     p_showcase.add_argument("--model_path", type=str, default=None, help="Path to the trained model (default: None)")
-    
+    p_showcase.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
+    p_showcase.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
     p_showcase.set_defaults(func=cmd_showcase)
     # ======================================================================================
     #                                       CALL

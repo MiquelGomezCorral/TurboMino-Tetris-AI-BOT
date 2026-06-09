@@ -18,7 +18,7 @@ class HeuristicsResult(NamedTuple):
     base_weights = {
         'blocks': -0.01,
         'weighted_blocks': -0.1,
-        'clearable_lines': 1.0,
+        'clearable_lines': 10.0,
         'roughness': -0.25,
         'col_holes': -1.0,
         'connected_holes': -1.0,

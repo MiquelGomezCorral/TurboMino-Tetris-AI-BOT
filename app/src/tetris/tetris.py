@@ -142,7 +142,7 @@ class ActivePiece:
         piece_size = len(self._BASE_SHAPES[piece_type][0])
         
         self.x = (self.width - piece_size) // 2
-        self.y = self.height # it goes up one
+        self.y = self.height + 1
 
     def move_left(self):
         self.x -= 1
@@ -169,14 +169,23 @@ def _clear_bitmap(b_rows, width, visible_height, c_rows=None):
     cleared = int(np.sum(full_mask))
     if cleared == 0:
         return (b_rows, c_rows, 0) if c_rows is not None else (b_rows, 0)
-    kept = visible_slice[~full_mask]
+
+    visible_kept = visible_slice[~full_mask]
+    above_visible = b_rows[visible_height:]
+    all_kept = np.concatenate((visible_kept, above_visible))
+
     cleared_b = b_rows.copy()
-    cleared_b[:visible_height] = np.concatenate((kept, np.zeros(cleared, dtype=np.uint32)))
+    cleared_b[:len(all_kept)] = all_kept
+    cleared_b[len(all_kept):] = 0
+
     if c_rows is not None:
         visible_c = c_rows[:visible_height]
         kept_c = visible_c[~full_mask]
+        above_c = c_rows[visible_height:]
+        all_kept_c = np.vstack((kept_c, above_c)) if len(above_c) > 0 else kept_c
         cleared_c = c_rows.copy()
-        cleared_c[:visible_height] = np.vstack((kept_c, np.zeros((cleared, width), dtype=int)))
+        cleared_c[:len(all_kept_c)] = all_kept_c
+        cleared_c[len(all_kept_c):] = 0
         return cleared_b, cleared_c, cleared
     return cleared_b, cleared
 
@@ -239,22 +248,29 @@ class Board:
             self.load_playfield(playfield)
 
     def load_playfield(self, playfield: str):
-        max_size = self.width * self.visible_height
-        playfield = playfield[:max_size]
-
         flat_ints = [char_map(c) for c in playfield]
 
-        if len(flat_ints) < max_size:
-            flat_ints.extend([0] * (max_size - len(flat_ints)))
+        remainder = len(flat_ints) % self.width
+        if remainder != 0:
+            flat_ints.extend([0] * (self.width - remainder))
 
-        c_matrix = np.array(flat_ints, dtype=int).reshape((self.visible_height, self.width))
+        n_rows = len(flat_ints) // self.width
+
+        if n_rows > self.height:
+            extra = n_rows - self.height
+            self.b_rows = np.concatenate([self.b_rows, np.zeros(extra, dtype=np.uint32)])
+            if self.color_map:
+                self.c_rows = np.concatenate([self.c_rows, np.zeros((extra, self.width), dtype=int)])
+            self.height = n_rows
+
+        c_matrix = np.array(flat_ints, dtype=int).reshape((n_rows, self.width))
         # c_matrix = c_matrix[::-1]
 
         powers_of_2 = (1 << np.arange(self.width, dtype=np.uint32))
-        self.b_rows[:self.visible_height] = (c_matrix > 0).dot(powers_of_2).astype(np.uint32)
+        self.b_rows[:n_rows] = (c_matrix > 0).dot(powers_of_2).astype(np.uint32)
 
         if self.color_map:
-            self.c_rows[:self.visible_height] = c_matrix
+            self.c_rows[:n_rows] = c_matrix
 
     def check_collision(self, piece_rows: list[int], x: int, y: int) -> bool:
         for local_y, row_mask in enumerate(piece_rows):
@@ -458,7 +474,7 @@ class Tetris:
 
     def __init__(
         self, 
-        width: int = 10, height: int = 20, vanish_zone: int = 4, 
+        width: int = 10, height: int = 20, vanish_zone: int = 5, 
         color_map: bool = False, 
         playfield: str = None, 
         next_pieces: str = None,

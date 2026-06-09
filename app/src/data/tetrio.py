@@ -57,14 +57,15 @@ class TetrioDataset(Dataset):
         game = Tetris(
             playfield=row['playfield'],
             next_pieces=row['next'],
-            active_piece=row['real_current'],
-            hold_piece=row['real_hold'],
+            active_piece=row['placed'],
+            hold_piece=row['hold'],
+            vanish_zone=self.T_CONFIG.vanish_zone,
         )
 
         searcher = MoveSearcher(game, self.CONFIG, self.T_CONFIG)
         _, features = searcher.get_all_features()
 
-        board = Board(game.width, game.height, game.vanish_zone, game.color_map, row['playfield_next'])
+        board = Board(game.width, game.height, game.vanish_zone, game.color_map, row['playfield_next'][row['immediate_garbage']*10:])
         target = find_board_index(board, features['boards'])
 
         assert target != -1, f"Board not found in placements for row {row_idx}, {target=}"
@@ -89,6 +90,7 @@ class TetrioDataset(Dataset):
             "boards":          torch.from_numpy(boards).float(),
             "queues":          torch.from_numpy(queues).float(),
             "queue_idx":       torch.from_numpy(queue_idx).long(),
+            "game_state":      torch.from_numpy(features['game_state']).float(),
             "placement_mask":  torch.from_numpy(placement_mask).float(),
         }
 

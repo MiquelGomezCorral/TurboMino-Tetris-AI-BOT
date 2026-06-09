@@ -83,7 +83,6 @@ class MoveSearcher:
                 if down_state not in visited:
                     visited.add(down_state)
                     queue.append((*down_state, path + (ActionEnum.DOWN,)))
-                continue # Skip lateral inputs mid-air to match true physics rules
 
             # --- LATERAL & ROTATIONAL SEARCH BRANCHES ---
             # 1. Slide Left
@@ -197,6 +196,10 @@ class MoveSearcher:
                 break
                 
             grid = self._extract_features_2d(placement['bitmap'])
+            target_h = boards_matrix.shape[1]
+            if grid.shape[0] > target_h:
+                grid = grid[:target_h]
+            pad_h = max(0, target_h - grid.shape[0])
             boards_matrix[i] = np.pad(grid, ((0, pad_h), (pad_left, pad_right)), constant_values=1)
             queue_idx_matrix[i] = q_idx
             

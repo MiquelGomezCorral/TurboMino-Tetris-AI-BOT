@@ -85,7 +85,7 @@ class TetrisEnv(gym.Env):
             if self.CONFIG.use_heuristic_rewards:
                 reward += self.evaluator.evaluate(self.game.board).compute_total()
 
-            reward = np.sign(reward) * np.sqrt(np.abs(reward)) / 10.0
+        reward = np.sign(reward) * np.sqrt(np.abs(reward)) / 10.0
 
         
         # ===========  4. Get next states =========== 
