@@ -48,6 +48,16 @@ pip install -e .
 uv pip install ipykernel
 python -m ipykernel install --user --name=TETRIO_env --display-name "TETRIO_env (Conda)"
 ```
+### Training
+Launch PPO training in background with a config file from `configs/`:
+```bash
+bash scripts/train_ppo.sh config_curr_ppo.yaml
+```
+Stop training:
+```bash
+bash scripts/stop_training.sh config_curr_ppo.yaml
+```
+
 ### Dataset Source
 Link: [Tetr.io Top Players Replays (Tetris)](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
 
@@ -97,6 +107,16 @@ pip install -e .
 uv pip install ipykernel
 python -m ipykernel install --user --name=TETRIO_env --display-name "TETRIO_env (Conda)"
 ```
+### Entrenamiento
+Lanzar entrenamiento PPO en segundo plano con un config de `configs/`:
+```bash
+bash scripts/train_ppo.sh config_curr_ppo.yaml
+```
+Detener entrenamiento:
+```bash
+bash scripts/stop_training.sh config_curr_ppo.yaml
+```
+
 ### Fuente dataset
 Link: [Tetr.io Top Players Replays (Tetris)](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
 

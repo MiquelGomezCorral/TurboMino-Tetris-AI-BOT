@@ -14,9 +14,17 @@ pip install -e app/                                   # editable install, makes 
 
 ```bash
 python app/main.py play-tetris -W 10 -H 20            # interactive Pygame window
-python app/main.py test                               # ad-hoc test slot
-python app/src/models/train.py                        # PPO training (not wired to CLI)
+python app/main.py --config <config.yaml> train-ppo   # CLI: train PPO model
 ```
+
+## Training Launcher
+
+```bash
+bash scripts/train_ppo.sh config_curr_ppo.yaml        # launch PPO in background (nohup)
+bash scripts/stop_training.sh config_curr_ppo.yaml    # kill that background process
+```
+
+Logs and PID files go into `logs/<config_name>.log` / `logs/<config_name>.pid`.
 
 No tests, no linter/formatter, no pre-commit, no CI.
 
