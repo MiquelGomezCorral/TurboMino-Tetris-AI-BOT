@@ -1,8 +1,8 @@
 exp_name: "config_curr_ppo"
 seed: 42
 
-net_arch:  [128]
-features_per_placement: 4
+net_arch:  [156]
+features_per_placement: 1
 learning_rate: 0.0001
 lr_end: 0.00001
 clip_range: 0.1
@@ -20,10 +20,11 @@ total_timesteps: 5000000
 
 clear_lines_on_placement: true
 use_heuristic_rewards: true
+target_kl: 0.015
 
 # Uncomment to enable curriculum (board width progression):
 curriculum:
   4: 1000000
   6: 1000000
   8: 1000000
-  10: 2000000
+  10: 2500000

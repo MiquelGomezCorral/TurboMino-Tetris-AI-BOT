@@ -65,19 +65,24 @@ class TransformerBlock(nn.Module):
 # ----------------------------------------------------------------------------- #
 #  Board encoder (CNN with residual skip — shared across every placement)       #
 # ----------------------------------------------------------------------------- #
-class ConvResBlock(nn.Module):
+class WideResBlock(nn.Module):
     """The 'Skip' connection from the diagram: conv -> conv with a residual add."""
 
-    def __init__(self, ch: int):
+    def __init__(self, ch: int, k: int = 4):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(ch, ch, 3, padding='same'),
+            nn.BatchNorm2d(ch),
+            nn.Conv2d(ch, ch*k, 3, padding='same'),
             nn.GELU(),
-            nn.Conv2d(ch, ch, 3, padding='same'),
+            nn.Dropout(0.5),
+            nn.BatchNorm2d(ch),
+            nn.Conv2d(ch*k, ch*k, 3, padding='same'),
+            nn.GELU(),
         )
+        self.skip_proj = nn.Conv2d(ch, ch*k, 1) if k != 1 else nn.Identity()
 
     def forward(self, x):
-        return F.gelu(x + self.net(x))
+        return F.gelu(self.skip_proj(x) + self.net(x))
 
 
 class BoardEncoder(nn.Module):
@@ -87,20 +92,23 @@ class BoardEncoder(nn.Module):
     placement identically (permutation-equivariant over the M axis).
     """
 
-    def __init__(self, height: int, width: int, d_model: int, ch: int = 16):
+    def __init__(self, height: int, width: int, d_model: int, ch: int = 32, k: int = 4):
         super().__init__()
         self.stem = nn.Sequential(nn.Conv2d(1, ch, 3, padding='same'), nn.GELU())
-        self.res = ConvResBlock(ch)
-        self.expand = nn.Sequential(nn.Conv2d(ch, 2 * ch, 3, padding='same'), nn.GELU())
+        self.res_1 = WideResBlock(ch, k)
+        self.res_2 = WideResBlock(ch, k)
+        self.conv_1 = nn.Sequential(nn.Conv2d(ch*k, ch*k, 3, padding='same'), nn.GELU())
+        self.conv_2 = nn.Sequential(nn.Conv2d(ch*k, ch*k, 3, padding='same'), nn.GELU())
         self.pool = nn.MaxPool2d(2)
 
-        flat_dim = 2 * ch * (height // 2) * (width // 2)
+        flat_dim = k * ch * (height // 2) * (width // 2)
         self.proj = nn.Linear(flat_dim, d_model)
 
     def forward(self, boards):  # (B, M, H, W) -> (B, M, d_model)
         b, m = boards.shape[:2]
         x = rearrange(boards, "b m h w -> (b m) 1 h w")
-        x = self.pool(self.expand((self.res(self.stem(x)))))
+        x = self.pool(self.conv_1(self.res_1(self.stem(x))))
+        x = self.pool(self.conv_2(self.res_2(self.stem(x))))
         x = rearrange(x, "bm c h w -> bm (c h w)")
         x = self.proj(x)
         return rearrange(x, "(b m) d -> b m d", b=b, m=m)
@@ -385,6 +393,13 @@ class TurboMinoModule(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         return self._shared_step(batch, "test")
+
+    def predict(self, obs, action_masks=None, deterministic=True):
+        obs_tensor = {k: torch.from_numpy(v).unsqueeze(0).to(self.device) for k, v in obs.items()}
+        self.eval()
+        with torch.no_grad():
+            logits = self(obs_tensor)
+        return logits.argmax(dim=1).item(), None
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
