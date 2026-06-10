@@ -1,6 +1,9 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, HeuristicEvaluator
 from src.config import Configuration
@@ -125,3 +128,29 @@ class TetrisEnv(gym.Env):
     def get_game(self) -> Tetris:
         """Returns the underlying Tetris game instance for rendering or analysis."""
         return self.game
+    
+
+
+# ==========================================
+# 2. Env factories
+# ==========================================
+def mask_fn(env: gym.Env):
+    return env.unwrapped.valid_action_mask()
+
+
+def make_train_env(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+    if CONFIG.n_envs > 1:
+        return DummyVecEnv([
+            lambda: ActionMasker(Monitor(TetrisEnv(CONFIG, T_CONFIG)), mask_fn)
+            for _ in range(CONFIG.n_envs)
+        ])
+    env = TetrisEnv(CONFIG, T_CONFIG)
+    env = Monitor(env)
+    env = ActionMasker(env, mask_fn)
+    return env
+
+
+def make_eval_env(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+    env = TetrisEnv(CONFIG, T_CONFIG)
+    env = ActionMasker(env, mask_fn)
+    return env

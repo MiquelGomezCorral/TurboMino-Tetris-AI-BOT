@@ -1,6 +1,4 @@
 import pytorch_lightning as pl
-import gymnasium as gym
-import numpy as np
 
 from maikol_utils.print_utils import print_separator
 
@@ -8,6 +6,7 @@ from src.data import load_tetrio_data
 from src.models import TurboMinoModule, TetrisEnv
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
+from .test import test_model
 
 
 def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
@@ -52,21 +51,5 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 
-    test_tetrio_turbomino(CONFIG, T_CONFIG, checkpoint_path=trainer.checkpoint_callback.best_model_path)
-
-
-def test_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, checkpoint_path: str):
-    print_separator("Test Classifier", sep_type="SUPER")
-    pl.seed_everything(CONFIG.seed, workers=True)
-
-    _, test_loader, _ = load_tetrio_data(CONFIG, T_CONFIG)
-
-    observation_space = TetrisEnv(CONFIG, T_CONFIG).observation_space
-
-    model = TurboMinoModule.load_from_checkpoint(
-        checkpoint_path, CONFIG=CONFIG, T_CONFIG=T_CONFIG, observation_space=observation_space
-    )
-
-    trainer = pl.Trainer(deterministic="warn")
-    results = trainer.test(model=model, dataloaders=test_loader)
-    print(results)
+    CONFIG.final_model_path = trainer.checkpoint_callback.best_model_path
+    test_model(CONFIG, T_CONFIG)
