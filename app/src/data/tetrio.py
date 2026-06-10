@@ -9,6 +9,20 @@ from src.tetris import MoveSearcher, Board, TetrisConfiguration, Tetris
 
 
 
+def _load_valid_indices(path: str) -> list[int] | None:
+    if os.path.exists(path):
+        with open(path) as f:
+            return [int(line.strip()) for line in f if line.strip()]
+    return None
+
+
+def load_tetrio_loader(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, path: str ):
+    print(f" - Loading Tetrio data from {path}...")
+    df = pd.read_csv(path)
+    valid_indices = _load_valid_indices(path.replace('.csv', '_valid.txt'))
+    dataset = TetrioDataset(df, CONFIG, T_CONFIG, valid_indices)
+    return DataLoader(dataset, batch_size=CONFIG.batch_size, shuffle=True)
+
 def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, use_transforms=True):
     """
     Load and preprocess the tetrio classification dataset based on the provided configuration.
@@ -20,21 +34,10 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, use_t
         Tuple: A tuple containing the training and testing data (x_train, x_test, y_train, y_test).
     """
     # ============== Load data ============== 
-    print(' - Loading Tetrio train...')
-    df_train = pd.read_csv(CONFIG.tetrio_train)
-    print(' - Loading Tetrio test...')
-    df_test = pd.read_csv(CONFIG.tetrio_test)
-    print(' - Loading Tetrio val...')
-    df_val = pd.read_csv(CONFIG.tetrio_val)
+    train_loader = load_tetrio_loader(CONFIG.tetrio_train)
+    test_loader = load_tetrio_loader(CONFIG.tetrio_test)
+    val_loader = load_tetrio_loader(CONFIG.tetrio_val)
 
-    # ============== Create datasets dataloaders ==============
-    train_dataset = TetrioDataset(df_train, CONFIG, T_CONFIG)
-    test_dataset  = TetrioDataset(df_test, CONFIG, T_CONFIG)
-    val_dataset   = TetrioDataset(df_val, CONFIG, T_CONFIG)
-
-    train_loader = DataLoader(train_dataset, batch_size=CONFIG.batch_size, shuffle=True)
-    test_loader  = DataLoader(test_dataset,  batch_size=CONFIG.batch_size, shuffle=False)
-    val_loader   = DataLoader(val_dataset,   batch_size=CONFIG.batch_size, shuffle=False)
 
     return train_loader, test_loader, val_loader
 
@@ -44,16 +47,22 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, use_t
 # ========================================================
 
 class TetrioDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+    def __init__(self, df: pd.DataFrame, CONFIG: Configuration, T_CONFIG: TetrisConfiguration,
+                 valid_indices: list[int] | None = None):
         self.df = df
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
+        self._indices = valid_indices if valid_indices is not None else list(range(len(df)))
 
     def __len__(self):
-        return len(self.df)
-    
-    def __getitem__(self, row_idx):
+        return len(self._indices)
+
+    def __getitem__(self, idx):
+        row_idx = self._indices[idx]
         row = self.df.iloc[row_idx]
+
+        pf_rows = (len(row['playfield']) + self.T_CONFIG.board_w - 1) // self.T_CONFIG.board_w
+        game_h = max(self.T_CONFIG.board_h, pf_rows)
 
         game = Tetris(
             playfield=row['playfield'],
@@ -61,15 +70,17 @@ class TetrioDataset(Dataset):
             active_piece=row['placed'],
             hold_piece=row['hold'],
             vanish_zone=self.T_CONFIG.vanish_zone,
+            height=game_h,
         )
 
         searcher = MoveSearcher(game, self.CONFIG, self.T_CONFIG)
         _, features = searcher.get_all_features()
 
-        board = Board(game.width, game.height, game.vanish_zone, game.color_map, row['playfield_next'][row['immediate_garbage']*10:])
+        board = Board(game.width, game_h, game.vanish_zone, game.color_map,
+                      row['playfield_next'][int(row['immediate_garbage'])*10:])
         target = find_board_index(board, features['boards'])
 
-        assert target != -1, f"Board not found in placements for row {row_idx}, {target=}"
+        assert target != -1, f"Board not found in placements for row {row_idx}, {target=}. Run validation to generate valid_indices."
 
         # Pad all variable-length tensors to max_placements
         M_actual = features['boards'].shape[0]
