@@ -193,6 +193,8 @@ class MoveSearcher:
         for i, (placement, q_idx) in enumerate(placements_to_process):
             if i >= self.CONFIG.max_placements:
                 print_warn(f"Number of placements ({len(placements_to_process)}) exceeds CONFIG.max_placements ({self.CONFIG.max_placements}). Truncating extra placements. Increase CONFIG.max_placements to capture more.")
+                print_warn(f"{PieceEnum(active_piece_type) =}, {PieceEnum(hold_piece_type) =}")
+                self.game.print_state()
                 break
                 
             grid = self._extract_features_2d(placement['bitmap'])
