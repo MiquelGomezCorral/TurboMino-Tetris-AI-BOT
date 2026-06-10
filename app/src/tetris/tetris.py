@@ -598,6 +598,13 @@ class Tetris:
     def get_b2b_active(self):
         return self.score_system.get_b2b_active()
     
+    def get_lines_cleared(self):
+        return self.score_system.lines_cleared_total
+    def get_total_all_clears(self):
+        return self.score_system.total_all_clears
+    def get_total_tetrises(self):
+        return self.score_system.total_tetrises
+    
     def get_hold_or_next_piece_type(self):
         """Returns the piece type that would be active if the player performs a hold action right now.
         If hold is available and there is a piece in hold, returns the hold piece type.

@@ -14,6 +14,7 @@ class ScoringSystem:
         self.b2b_active = False
         self.last_move_name = ""
         self.total_all_clears = 0
+        self.total_tetrises = 0
 
     def _compute_move_name(self, lines: int, spin: SpinType, perfect_clear: bool) -> str:
         parts = []
@@ -85,7 +86,9 @@ class ScoringSystem:
         self.level = (self.lines_cleared_total // 10) + 1
         if perfect_clear:
             self.total_all_clears += 1
-            
+        if lines == 4:
+            self.total_tetrises += 1
+
     def get_combo(self):
         return self.combo
 
