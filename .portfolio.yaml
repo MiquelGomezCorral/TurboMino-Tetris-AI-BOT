@@ -1,0 +1,17 @@
+title:
+  en: TurboMino: Tetris AI Bot with PPO + CNN + RoPE
+  es: TurboMino: Bot de Tetris con PPO + CNN + RoPE
+finished: progress
+descriptionShort:
+  en: Tetris agent trained with PPO (Stable-Baselines3) on a custom Gymnasium environment. Uses CNN with Rotary Position Embeddings (RoPE), bit-packed uint32 board representation, exhaustive placement search via BFS, and interactive Pygame visualization.
+  es: Agente de Tetris entrenado con PPO (Stable-Baselines3) sobre un entorno Gymnasium personalizado. Usa CNN con Rotary Position Embeddings (RoPE), representación de tablero con filas empaquetadas en uint32, búsqueda exhaustiva de colocaciones vía BFS, y visualización interactiva con Pygame.
+descriptionLong:
+  en: |
+    Tetris bot that plays autonomously using deep reinforcement learning. The Tetris environment is implemented as a Gymnasium gym with configurable board dimensions. Board representation uses bit-packed uint32 arrays per row, decoded by _extract_features_2d via bit shifts. The RL model is a CNN with Rotary Position Embeddings (RoPE) trained with PPO from Stable-Baselines3 + sb3-contrib. Includes MoveSearcher that exhaustively explores all piece rotations and translations via BFS. Interactive mode with Pygame (python app/main.py play-tetris). Supports padding to max board size, horizontally centered with top anchor. Training data sourced from Tetr.io top player replays.
+  es: |
+    Bot de Tetris que juega automáticamente usando aprendizaje por refuerzo profundo. El entorno de Tetris está implementado como gimnasio Gymnasium con tableros de tamaño configurable. La representación del tablero usa filas empaquetadas en arrays uint32 (bit-packed), decodificadas por _extract_features_2d mediante desplazamientos de bits. El modelo de RL es una CNN con Rotary Position Embeddings (RoPE) entrenada con PPO de Stable-Baselines3 + sb3-contrib. Incluye MoveSearcher que explora exhaustivamente todas las rotaciones y traslaciones posibles de cada pieza mediante BFS. Modo interactivo con Pygame (python app/main.py play-tetris). Soporta padding a tamaño máximo de tablero, centrado horizontal con anclaje superior. Datos de entrenamiento obtenidos de replays de top players de Tetr.io.
+technologies: [python, pytorch, reinforcement-learning, numpy]
+tags: [other]
+slug: TurboMino-Tetris-AI-BOT
+order: 95
+featured: false
