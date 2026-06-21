@@ -1,6 +1,6 @@
 title:
-  en: TurboMino: Tetris AI Bot with PPO + CNN + RoPE
-  es: TurboMino: Bot de Tetris con PPO + CNN + RoPE
+  en: "TurboMino: Tetris AI Bot with PPO + CNN + RoPE"
+  es: "TurboMino: Bot de Tetris con PPO + CNN + RoPE"
 finished: progress
 descriptionShort:
   en: Tetris agent trained with PPO (Stable-Baselines3) on a custom Gymnasium environment. Uses CNN with Rotary Position Embeddings (RoPE), bit-packed uint32 board representation, exhaustive placement search via BFS, and interactive Pygame visualization.
