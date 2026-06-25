@@ -8,46 +8,25 @@
 ## English
 
 ### About
-This repository serves as a **robust and scalable template** for Python projects. It is designed to minimize setup time for data science and software development workflows by providing a pre-configured folder structure and modern dependency management tools.
-
-**Repository Structure:**
-* `app/`: Source code for the application (installable package).
-* `data/`: Directory for datasets (raw and processed).
-* `models/`: Storage for serialized models.
-* `notebooks/`: Jupyter notebooks for experimentation and analysis.
-* `docs/`: Project documentation.
-* `logs/`: Application logs.
-
-### Features
-* **Modular Architecture:** The `app/` directory is configured as an editable package (`-e`), allowing you to import your own code easily into notebooks or scripts.
-* **Modern Tooling:** Optimized for speed using `uv` for dependency resolution.
-* **Data Science Ready:** Includes setup for Jupyter Kernels linked to the virtual environment.
-* **Environment Management:** Clear instructions for `venv` creation.
-
-### Usage
-To start a new project using this structure:
-1. Click the green **"Use this template"** button at the top right of this page.
-2. Select **"Create a new repository"**.
-3. Clone your new repo and follow the setup instructions below.
+Tetris AI bot that plays autonomously using deep reinforcement learning. Trained with PPO (Stable-Baselines3) on a custom Gymnasium environment. Uses a CNN with Rotary Position Embeddings (RoPE), bit-packed uint32 board representation, and exhaustive piece placement search via BFS. Includes an interactive Pygame mode for human play or watching the agent.
 
 ### Setup & Installation
-Run the following commands to create your local environment and install dependencies:
 
 ```bash
 conda create --name TETRIO_env python=3.13 -y
 conda activate TETRIO_env
 
-# Install uv global on you pc or only on this env
-# if only on this env:
-# pip install uv
-# if global, no need to install anything extra, just:
 uv pip install -r requirements.txt
-
-pip install -e .
-
-uv pip install ipykernel
-python -m ipykernel install --user --name=TETRIO_env --display-name "TETRIO_env (Conda)"
+pip install -e app/
 ```
+
+### Usage
+
+```bash
+python app/main.py play-tetris -W 10 -H 20     # Interactive Pygame window
+python app/main.py test                          # Ad-hoc test slot
+```
+
 ### Training
 Launch PPO training in background with a config file from `configs/`:
 ```bash
@@ -58,55 +37,42 @@ Stop training:
 bash scripts/stop_training.sh config_curr_ppo.yaml
 ```
 
-### Dataset Source
-Link: [Tetr.io Top Players Replays (Tetris)](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
+### Architecture
+- **Tetris engine** (`src/tetris/`): Core game logic, bit-packed uint32 board rows, MoveSearcher (BFS over all piece rotations/translations)
+- **Gymnasium env** (`src/models/`): `TetrisEnv` with configurable board size, padded to max dimensions
+- **RL model**: CNN + Rotary Position Embeddings (RoPE) trained with PPO (Stable-Baselines3 + sb3-contrib)
+- **Visualization**: Pygame interactive mode with real-time rendering
+
+### Dataset
+[Tetr.io Top Players Replays](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
 
 *Maintained by [MiquelGomezCorral](https://miquelgc.net)*
+
+---
 
 <a name="español"></a>
 ## Español
 
 ### Sobre el proyecto
-Este repositorio sirve como una **plantilla robusta y escalable** para proyectos en Python. Está diseñado para minimizar el tiempo de configuración en flujos de trabajo de ciencia de datos y desarrollo de software, proporcionando una estructura de carpetas preconfigurada y herramientas modernas de gestión de dependencias.
-
-**Estructura del Repositorio:**
-* `app/`: Código fuente de la aplicación (paquete instalable).
-* `data/`: Directorio para datasets (crudos y procesados).
-* `models/`: Almacenamiento para modelos serializados.
-* `notebooks/`: Jupyter notebooks para experimentación y análisis.
-* `docs/`: Documentación del proyecto.
-* `logs/`: Logs de la aplicación.
-
-### Características
-* **Arquitectura Modular:** El directorio `app/` está configurado como un paquete editable (`-e`), lo que permite importar tu propio código fácilmente en notebooks o scripts.
-* **Herramientas Modernas:** Optimizado para velocidad usando `uv` para la resolución de dependencias.
-* **Listo para Data Science:** Incluye configuración para Kernels de Jupyter vinculados al entorno virtual.
-* **Gestión de Entorno:** Instrucciones claras para la creación de `venv`.
-
-### Cómo usarlo
-Para iniciar un nuevo proyecto usando esta estructura:
-1. Haz clic en el botón verde **"Use this template"** (Usar esta plantilla) en la parte superior derecha de esta página.
-2. Selecciona **"Create a new repository"** (Crear un nuevo repositorio).
-3. Clona tu nuevo repo y sigue las instrucciones de configuración a continuación.
+Bot de Tetris que juega automáticamente usando aprendizaje por refuerzo profundo. Entrenado con PPO (Stable-Baselines3) sobre un entorno Gymnasium personalizado. Usa una CNN con Rotary Position Embeddings (RoPE), representación del tablero con filas empaquetadas en uint32, y búsqueda exhaustiva de colocaciones de piezas mediante BFS. Incluye modo interactivo con Pygame para jugar o ver al agente.
 
 ### Configuración e Instalación
-Ejecuta los siguientes comandos para crear tu entorno local e instalar las dependencias:
 
 ```bash
 conda create --name TETRIO_env python=3.13 -y
 conda activate TETRIO_env
 
-# Install uv global on you pc or only on this env
-# if only on this env:
-# pip install uv
-# if global, no need to install anything extra, just:
 uv pip install -r requirements.txt
-
-pip install -e .
-
-uv pip install ipykernel
-python -m ipykernel install --user --name=TETRIO_env --display-name "TETRIO_env (Conda)"
+pip install -e app/
 ```
+
+### Uso
+
+```bash
+python app/main.py play-tetris -W 10 -H 20     # Ventana interactiva Pygame
+python app/main.py test                          # Test ad-hoc
+```
+
 ### Entrenamiento
 Lanzar entrenamiento PPO en segundo plano con un config de `configs/`:
 ```bash
@@ -117,8 +83,13 @@ Detener entrenamiento:
 bash scripts/stop_training.sh config_curr_ppo.yaml
 ```
 
-### Fuente dataset
-Link: [Tetr.io Top Players Replays (Tetris)](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
+### Arquitectura
+- **Motor Tetris** (`src/tetris/`): Lógica del juego, filas uint32 bit-packed, MoveSearcher (BFS sobre rotaciones/traslaciones)
+- **Entorno Gymnasium** (`src/models/`): `TetrisEnv` con tamaño configurable, padding a dimensiones máximas
+- **Modelo RL**: CNN + Rotary Position Embeddings (RoPE) entrenado con PPO (Stable-Baselines3 + sb3-contrib)
+- **Visualización**: Modo interactivo Pygame con renderizado en tiempo real
 
+### Dataset
+[Tetr.io Top Players Replays](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
 
-*Matenido por [MiquelGomezCorral](https://miquelgc.net)*
+*Mantenido por [MiquelGomezCorral](https://miquelgc.net)*
