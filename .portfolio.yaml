@@ -11,7 +11,7 @@ descriptionLong:
   es: |
     Bot de Tetris que juega automáticamente usando aprendizaje por refuerzo profundo. El entorno de Tetris está implementado como gimnasio Gymnasium con tableros de tamaño configurable. La representación del tablero usa filas empaquetadas en arrays uint32 (bit-packed), decodificadas por _extract_features_2d mediante desplazamientos de bits. El modelo de RL es una CNN con Rotary Position Embeddings (RoPE) entrenada con PPO de Stable-Baselines3 + sb3-contrib. Incluye MoveSearcher que explora exhaustivamente todas las rotaciones y traslaciones posibles de cada pieza mediante BFS. Modo interactivo con Pygame (python app/main.py play-tetris). Soporta padding a tamaño máximo de tablero, centrado horizontal con anclaje superior. Datos de entrenamiento obtenidos de replays de top players de Tetr.io.
 technologies: [python, pytorch, reinforcement-learning, numpy]
-tags: [other]
+tags: [personal]
 logo: readme_images/Thumbnail.png
 screenShoots:
   - readme_images/Thumbnail.png
