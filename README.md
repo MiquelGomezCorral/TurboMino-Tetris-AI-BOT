@@ -93,3 +93,16 @@ bash scripts/stop_training.sh config_curr_ppo.yaml
 [Tetr.io Top Players Replays](https://www.kaggle.com/datasets/n3koasakura/tetr-io-top-players-replays)
 
 *Mantenido por [MiquelGomezCorral](https://miquelgc.net)*
+
+---
+
+<!-- portfolio-gallery:start -->
+## Gallery
+
+<p align="center">
+  <img src="readme_images/architecture.webp" width="48%" />
+  <img src="readme_images/image_169.webp" width="48%" />
+  <img src="readme_images/image%20copy_169.webp" width="48%" />
+  <img src="readme_images/image%20copy%202_169.webp" width="48%" />
+</p>
+<!-- portfolio-gallery:end -->
