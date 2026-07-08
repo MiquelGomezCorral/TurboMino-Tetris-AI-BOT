@@ -14,7 +14,7 @@ technologies: [ai, jupyter, numpy, pandas, pygame, python, pytorch, reinforcemen
 tags: [personal]
 logo: readme_images/image copy_169.webp
 screenShoots:
-  - readme_images/Thumbnail_169.webp
+  - readme_images/architecture.webp
   - readme_images/image_169.webp
   - readme_images/image copy_169.webp
   - readme_images/image copy 2_169.webp
@@ -28,6 +28,5 @@ keywords:
 slug: TurboMino-Tetris-AI-BOT
 relevancy: 95
 featured: false
-
 
 

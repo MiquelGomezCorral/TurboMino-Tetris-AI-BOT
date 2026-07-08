@@ -100,9 +100,10 @@ bash scripts/stop_training.sh config_curr_ppo.yaml
 ## Gallery
 
 <p align="center">
-  <img src="readme_images/architecture.webp" width="48%" />
-  <img src="readme_images/image_169.webp" width="48%" />
-  <img src="readme_images/image%20copy_169.webp" width="48%" />
-  <img src="readme_images/image%20copy%202_169.webp" width="48%" />
+  <img src="readme_images/architecture.webp" alt="architecture" width="48%" />
+  <img src="readme_images/image%20copy%202_169.webp" alt="image copy 2" width="48%" />
+  <img src="readme_images/image%20copy%203_169.webp" alt="image copy 3" width="48%" />
+  <img src="readme_images/image%20copy_169.webp" alt="image copy" width="48%" />
+  <img src="readme_images/image_169.webp" alt="image" width="48%" />
 </p>
 <!-- portfolio-gallery:end -->
