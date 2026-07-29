@@ -7,12 +7,15 @@ learning_rate: 0.0001
 lr_end: 0.00001
 clip_range: 0.1
 n_steps: 6250
-batch_size: 256
+batch_size: 48
 ent_coef: 0.005
 ent_coef_end: 0.001
 gamma: 0.99
 n_envs: 4
 verbose: 0
+
+wide_k: 2
+channels: 32
 
 save_freq: 25000
 

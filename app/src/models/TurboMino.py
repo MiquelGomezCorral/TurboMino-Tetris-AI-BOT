@@ -222,7 +222,7 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         _, height, width = observation_space["boards"].shape
 
 
-        self.board_encoder = BoardEncoder(height, width, d_model)
+        self.board_encoder = BoardEncoder(height, width, d_model, CONFIG.channels, CONFIG.wide_k)
         self.piece_encoder = PieceEncoder(
             num_categories=T_CONFIG.num_piece_categories,
             d_model=d_model,
