@@ -48,7 +48,7 @@ class TetrisEnv(gym.Env):
             ),
             "game_state": spaces.Box(
                 # Game state features: [combo, b2b, immediate garbage, incoming garbage]
-                low=np.array([-1.0, 0.0, 0.0, 0.0], dtype=np.float32),
+                low=np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32),
                 high=np.array([np.inf, np.inf, CONFIG.garbage_cap, np.inf], dtype=np.float32),
                 shape=(4,),
                 dtype=np.float32
@@ -105,7 +105,7 @@ class TetrisEnv(gym.Env):
             height=self.T_CONFIG.board_h,
             garbage_prob=self.CONFIG.garbage_prob,
             garbage_delay=self.CONFIG.garbage_delay,
-            garbage_probs=self.CONFIG.garbage_probs,
+            garbage_lines_probs=self.CONFIG.garbage_lines_probs,
             garbage_cap=self.CONFIG.garbage_cap,
         )
         self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG)

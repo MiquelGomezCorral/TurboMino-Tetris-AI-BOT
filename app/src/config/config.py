@@ -10,6 +10,8 @@ from maikol_utils.file_utils import make_dirs
 from maikol_utils.print_utils import print_separator
 import yaml
 
+
+
 @dataclass 
 class Configuration:
     """Configuration class for the project."""
@@ -53,6 +55,8 @@ class Configuration:
 
     weight_decay: float = 1e-4
     eta_min: float = 1e-5
+
+    aug_prob: float = 0.5
     # ===================================================================
     #                       PARAMETER RL
     # ===================================================================
@@ -93,9 +97,9 @@ class Configuration:
     use_heuristic_rewards: bool = True
 
     garbage_prob: float = 0.0774
-    garbage_delay: int = 3
+    garbage_delay: int = 5
     garbage_cap: int = 8
-    garbage_probs: list[float] = field(default_factory=lambda: [
+    garbage_lines_probs: list[float] = field(default_factory=lambda: [
         0.263604,
         0.155263,
         0.099349,

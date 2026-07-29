@@ -11,7 +11,7 @@ class ScoringSystem:
         self.score = 0
         self.level = 1
         self.lines_cleared_total = 0
-        self.combo = -1
+        self.combo = 0
         self.b2b_streak = 0
         self.last_move_name = ""
         self.total_all_clears = 0
@@ -38,34 +38,37 @@ class ScoringSystem:
         return " ".join(parts)
 
     def evaluate_drop(self, lines: int, spin: SpinType, perfect_clear: bool, drop_distance: int, hard_drop: bool):
+        tpin_attacks = {
+            SpinType.REGULAR: {0: 0, 1: 2, 2: 4, 3: 6},
+            SpinType.MINI: {0: 0, 1: 0, 2: 1},
+            SpinType.NONE: {0: 0, 1: 0, 2: 1, 3: 2, 4: 4}
+        }
         self.score += drop_distance * (2 if hard_drop else 1)
         self.last_move_name = self._compute_move_name(lines, spin, perfect_clear)
 
         if lines == 0:
             # if spin != SpinType.NONE:
                 # self.score += (400 if spin == SpinType.REGULAR else 100) * self.level
-            self.combo = -1
+            self.combo = 0
             return 0
 
         self.combo += 1
+        additional_combo_clears = self.combo - 1
         was_b2b_active = self.b2b_streak > 0
         base = 0
         is_difficult = False
-        attack = 0
+        attack = tpin_attacks[spin].get(lines, 0)
 
         if spin == SpinType.REGULAR:
             is_difficult = True
-            attack = (0, 2, 4, 6)[lines]
             if lines == 1: base = 800
             elif lines == 2: base = 1200
             elif lines == 3: base = 1600
         elif spin == SpinType.MINI:
             is_difficult = True
-            attack = (0, 0, 1)[lines]
             if lines == 1: base = 200
             elif lines == 2: base = 400
         else:
-            attack = (0, 0, 1, 2, 4)[lines]
             if lines == 1: base = 100
             elif lines == 2: base = 300
             elif lines == 3: base = 500
@@ -92,7 +95,7 @@ class ScoringSystem:
             elif lines == 3: base += 1800
             elif lines == 4: base += 2000
 
-        self.score += (base + (50 * self.combo)) * self.level
+        self.score += (base + (50 * additional_combo_clears)) * self.level
         self.lines_cleared_total += lines
         self.level = (self.lines_cleared_total // 10) + 1
         if perfect_clear:
@@ -103,9 +106,9 @@ class ScoringSystem:
         if is_difficult and was_b2b_active:
             attack += 1
         if attack > 0:
-            attack = int(attack * (1 + 0.25 * self.combo))
-        elif self.combo >= 2:
-            attack = int(math.log(1 + 1.25 * self.combo))
+            attack = int(attack * (1 + 0.25 * additional_combo_clears))
+        elif additional_combo_clears >= 2:
+            attack = int(math.log(1 + 1.25 * additional_combo_clears))
         if perfect_clear:
             attack += 5
         return attack + surge

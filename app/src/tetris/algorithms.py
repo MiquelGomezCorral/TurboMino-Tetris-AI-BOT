@@ -134,7 +134,7 @@ class MoveSearcher:
             
         return np.array(context_list, dtype=np.float32)
 
-    def get_all_features(self) -> dict:
+    def get_all_features(self, game_state=None) -> dict:
         """Combines placements, board states, and queue contexts into a unified observation dictionary for the model.
             Returns a dictionary with:
                 - 'boards': (P, H, W) tensor of board states for each placement
@@ -209,19 +209,21 @@ class MoveSearcher:
             self.all_placements.append((placement, q_idx))
 
 
+        if game_state is None:
+            game_state = [
+                self.game.get_combo(),
+                self.game.get_b2b_streak(),
+                self.game.get_immediate_garbage(),
+                self.game.get_incoming_garbage(),
+            ]
+
         # 4. Return the Dictionary
         return self.all_placements, {
             "boards": boards_matrix,
             "queues": queues_tensor,
             "queue_idx": queue_idx_matrix,
             "placement_mask": self.valid_action_mask(),
-            "game_state": np.array([
-                    float(self.game.get_combo()),              # 0, 1, 2, ...
-                    float(self.game.get_b2b_streak()),         # 0, 1, 2, ...
-                    float(self.game.get_immediate_garbage()),  # 0 to 8
-                    float(self.game.get_incoming_garbage())    # Any non-negative value
-                ], dtype=np.float32
-            )
+            "game_state": np.asarray(game_state, dtype=np.float32),
         }
     
 

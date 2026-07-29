@@ -3,19 +3,10 @@ from collections import deque
 import numpy as np
 import enum
 
+from src.config import Configuration
+
 from .scoring import SpinType, ScoringSystem
 
-
-DEFAULT_GARBAGE_PROBS = (
-    0.263604,
-    0.155263,
-    0.099349,
-    0.151832,
-    0.145719,
-    0.087687,
-    0.032314,
-    0.064232,
-)
 
 # ===================================================================
 #                       ENUMS
@@ -34,6 +25,21 @@ class PieceEnum(enum.Enum):
 
     def __str__(self):
         return str(self.value)
+
+
+
+PIECE_MAPPING = {
+    PieceEnum.I: PieceEnum.I,
+    PieceEnum.O: PieceEnum.O,
+    PieceEnum.T: PieceEnum.T,
+
+    PieceEnum.S: PieceEnum.Z,
+    PieceEnum.Z: PieceEnum.S,
+    PieceEnum.J: PieceEnum.L,
+    PieceEnum.L: PieceEnum.J,
+
+    PieceEnum.G: PieceEnum.G,
+}
 
 def char_map(char: str) -> int:
     piece = PieceEnum.__members__.get(char.upper(), PieceEnum.N)
@@ -516,15 +522,18 @@ class Tetris:
         active_piece: str = None,
         hold_piece: str = None,
         garbage_delay: int = 3,
-        garbage_prob: float = 0.0774,
-        garbage_probs: list[float] | tuple[float, ...] = DEFAULT_GARBAGE_PROBS,
+        garbage_prob: float = Configuration.garbage_prob,
+        garbage_lines_probs: list[float] | tuple[float, ...] = None,
         garbage_cap: int = 8,
     ):
+        if garbage_lines_probs is None:
+            garbage_lines_probs = Configuration().garbage_lines_probs
+
         assert 0 <= garbage_prob <= 1, "garbage_prob must be between 0 and 1"
         assert garbage_delay >= 1, "garbage_delay must be at least 1"
-        assert len(garbage_probs) == 8, "garbage_probs must contain probabilities for 1 to 8 lines"
-        assert all(prob >= 0 for prob in garbage_probs) and sum(garbage_probs) > 0, (
-            "garbage_probs must contain positive weight"
+        assert len(garbage_lines_probs) == 8, "garbage_lines_probs must contain probabilities for 1 to 8 lines"
+        assert all(prob >= 0 for prob in garbage_lines_probs) and sum(garbage_lines_probs) > 0, (
+            "garbage_lines_probs must contain positive weight"
         )
         assert garbage_cap > 0, "garbage_cap must be positive"
 
@@ -534,7 +543,7 @@ class Tetris:
         self.color_map = color_map
         self.garbage_prob = garbage_prob
         self.garbage_delay = garbage_delay
-        self.garbage_probs = tuple(garbage_probs)
+        self.garbage_probs = tuple(garbage_lines_probs)
         self.garbage_cap = garbage_cap
         self.board = Board(width, height, vanish_zone, color_map, playfield)
         self.queue = Queue(next_pieces)
@@ -729,4 +738,4 @@ class Tetris:
         # print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
         print(f"Act.: {self.active_piece.type.name} | Hold: {self.hold_piece.name if self.hold_piece else 'N'} | Next: {[p.name for p in self.queue.get_queue()]}")
         # print(f"Can Hold: {self.can_hold}")
-        print(f"Combo: {self.score_system.combo if self.score_system.combo >= 0 else '---':<5}  |  B2B: {self.score_system.b2b_streak:<3} |  Last Move: {self.score_system.last_move_name if self.score_system.last_move_name else '---':<15} | Total All Clears: {self.score_system.total_all_clears: <5}")
+        print(f"Combo: {self.score_system.combo if self.score_system.combo > 0 else '---':<5}  |  B2B: {self.score_system.b2b_streak:<3} |  Last Move: {self.score_system.last_move_name if self.score_system.last_move_name else '---':<15} | Total All Clears: {self.score_system.total_all_clears: <5}")

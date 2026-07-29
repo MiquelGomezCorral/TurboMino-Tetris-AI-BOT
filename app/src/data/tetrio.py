@@ -5,9 +5,13 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from src.config import Configuration
-from src.tetris import MoveSearcher, Board, TetrisConfiguration, Tetris
+from src.tetris import MoveSearcher, Board, PieceEnum, TetrisConfiguration, Tetris, PIECE_MAPPING
 
 
+MIRRORED_PIECE_INDICES = np.array([
+    PIECE_MAPPING.get(PieceEnum(i), PieceEnum(i)).value
+    for i in range(PieceEnum.L.value + 1)
+])
 
 def _load_valid_indices(path: str) -> list[int] | None:
     if os.path.exists(path):
@@ -23,13 +27,12 @@ def load_tetrio_loader(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, pat
     dataset = TetrioDataset(df, CONFIG, T_CONFIG, valid_indices)
     return DataLoader(dataset, batch_size=CONFIG.batch_size, shuffle=True)
 
-def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, use_transforms=True):
+def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     """
     Load and preprocess the tetrio classification dataset based on the provided configuration.
     Args:
         CONFIG (Configuration): The configuration object containing data loading parameters.
         T_CONFIG (TetrisConfiguration): The configuration object containing tetris-specific parameters.
-        use_transforms (bool): Whether to apply data augmentations (default: True).
     Returns:
         Tuple: A tuple containing the training and testing data (x_train, x_test, y_train, y_test).
     """
@@ -61,6 +64,9 @@ class TetrioDataset(Dataset):
         row_idx = self._indices[idx]
         row = self.df.iloc[row_idx]
 
+        if np.random.rand() < self.CONFIG.aug_prob:
+            row = flip_rows(row, self.T_CONFIG.board_w)
+
         pf_rows = (len(row['playfield']) + self.T_CONFIG.board_w - 1) // self.T_CONFIG.board_w
         game_h = max(self.T_CONFIG.board_h, pf_rows)
 
@@ -74,13 +80,13 @@ class TetrioDataset(Dataset):
         )
 
         searcher = MoveSearcher(game, self.CONFIG, self.T_CONFIG)
-        _, features = searcher.get_all_features()
-        features['game_state'] = np.array([
-            float(row['combo'] - 1),
+        game_state = [
+            float(row['combo']),
             float(row['btb']),
             float(row['immediate_garbage']),
             float(row['incoming_garbage']),
-        ], dtype=np.float32)
+        ]
+        _, features = searcher.get_all_features(game_state)
 
         board = Board(game.width, game_h, game.vanish_zone, game.color_map,
                       row['playfield_next'][int(row['immediate_garbage'])*10:])
@@ -169,6 +175,10 @@ class PrecomputedTetrioDataset(Dataset):
         game_state = data['game_state']   # (G,)
         target     = int(data['target'])
 
+        if np.random.rand() < self.CONFIG.aug_prob:
+            boards = boards[..., ::-1].copy()
+            queues = queues[..., MIRRORED_PIECE_INDICES]
+
         M_actual = boards.shape[0]
         M_max    = self.CONFIG.max_placements
 
@@ -206,3 +216,25 @@ def load_precomputed_tetrio_data(CONFIG: Configuration):
     val_loader   = DataLoader(val_dataset,   batch_size=CONFIG.batch_size, shuffle=False)
 
     return train_loader, test_loader, val_loader
+
+
+
+def flip_rows(row, width: int = 10):
+    """Flips the playfield and next queue rows horizontally for data augmentation."""
+    row = row.copy()
+
+    def _flip_field(pf: str) -> str:
+        return ''.join(pf[i:i + width][::-1] for i in range(0, len(pf), width))
+
+    def _flip_piece(piece: str) -> str:
+        piece = PieceEnum[piece]
+        return PIECE_MAPPING.get(piece, piece).name
+
+    row['playfield'] = _flip_field(row['playfield'])
+    row['playfield_next'] = _flip_field(row['playfield_next'])
+
+    for field in ('real_current', 'placed', 'real_hold', 'hold'):
+        row[field] = _flip_piece(row[field])
+    row['next'] = ''.join(_flip_piece(piece) for piece in row['next'])
+
+    return row
