@@ -75,7 +75,7 @@ class WideResBlock(nn.Module):
             nn.Conv2d(ch, ch*k, 3, padding='same'),
             nn.GELU(),
             nn.Dropout(0.5),
-            nn.BatchNorm2d(ch),
+            nn.BatchNorm2d(ch*k),
             nn.Conv2d(ch*k, ch*k, 3, padding='same'),
             nn.GELU(),
         )
@@ -96,19 +96,19 @@ class BoardEncoder(nn.Module):
         super().__init__()
         self.stem = nn.Sequential(nn.Conv2d(1, ch, 3, padding='same'), nn.GELU())
         self.res_1 = WideResBlock(ch, k)
-        self.res_2 = WideResBlock(ch, k)
+        self.res_2 = WideResBlock(ch*k, 1)
         self.conv_1 = nn.Sequential(nn.Conv2d(ch*k, ch*k, 3, padding='same'), nn.GELU())
         self.conv_2 = nn.Sequential(nn.Conv2d(ch*k, ch*k, 3, padding='same'), nn.GELU())
         self.pool = nn.MaxPool2d(2)
 
-        flat_dim = k * ch * (height // 2) * (width // 2)
+        flat_dim = k * ch * (height // 4) * (width // 4)
         self.proj = nn.Linear(flat_dim, d_model)
 
     def forward(self, boards):  # (B, M, H, W) -> (B, M, d_model)
         b, m = boards.shape[:2]
         x = rearrange(boards, "b m h w -> (b m) 1 h w")
         x = self.pool(self.conv_1(self.res_1(self.stem(x))))
-        x = self.pool(self.conv_2(self.res_2(self.stem(x))))
+        x = self.pool(self.conv_2(self.res_2(x)))
         x = rearrange(x, "bm c h w -> bm (c h w)")
         x = self.proj(x)
         return rearrange(x, "(b m) d -> b m d", b=b, m=m)
@@ -430,4 +430,3 @@ class TurboMinoModule(pl.LightningModule):
         rl_policy.features_extractor.load_state_dict(
             self.encoder.state_dict(), strict=True
         )
-
