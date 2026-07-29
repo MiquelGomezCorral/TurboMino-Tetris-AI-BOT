@@ -27,6 +27,7 @@ class TetrisConfiguration:
     # --- Computed layout (set in __post_init__) ---
     hold_offset_x: int = 1
     board_offset_x: int = 6
+    garbage_bar_offset_x: int = 10
     next_offset_x: int = 17
     total_height: int = 24
     screen_width: int = 660
@@ -42,7 +43,7 @@ class TetrisConfiguration:
         PieceEnum.Z: (212, 72, 80),
         PieceEnum.J: (104, 87, 192),
         PieceEnum.L: (203, 118, 75),
-        PieceEnum.G: (44, 43, 43),
+        PieceEnum.G: (70, 70, 70),
     })
     disabled_color: tuple = (80, 80, 80)
     grid_color: tuple = (40, 40, 40)
@@ -84,6 +85,7 @@ class TetrisConfiguration:
     def __post_init__(self):
         self.hold_offset_x = 1
         self.board_offset_x = self.sidebar_cols + self.gap_cols
+        self.garbage_bar_offset_x = self.board_offset_x - self.gap_cols
         self.next_offset_x = self.board_offset_x + self.board_w + self.gap_cols
         self.screen_width = (self.next_offset_x + self.sidebar_cols) * self.cell_size
 
@@ -112,6 +114,24 @@ def draw_ui_piece(CONFIG: TetrisConfiguration, surface, piece_type, offset_x, of
 
     for dx, dy in shape:
         draw_cell(CONFIG, surface, offset_x + dx, offset_y + dy, color)
+
+
+def draw_garbage_bar(CONFIG: TetrisConfiguration, surface, incoming_garbage, board_height, visible_height):
+    groups = {}
+    for lines, turns, _ in incoming_garbage:
+        groups[turns] = groups.get(turns, 0) + lines
+
+    garbage_color = CONFIG.colors[PieceEnum.G]
+    screen_y = board_height - 1
+    max_screen_y = board_height - visible_height
+
+    for turns, lines in sorted(groups.items()):
+        color = CONFIG.game_over_color if turns <= 1 else garbage_color
+        for _ in range(lines):
+            if screen_y < max_screen_y:
+                return
+            draw_cell(CONFIG, surface, CONFIG.garbage_bar_offset_x, screen_y, color)
+            screen_y -= 1
 
 
 def draw_text(CONFIG: TetrisConfiguration, surface, text: str, cell_x: int, cell_y: int, font_size: int = None, color: tuple = None):
