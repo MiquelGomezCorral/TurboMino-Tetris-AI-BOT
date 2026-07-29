@@ -236,7 +236,7 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         self.piece_to_board = TransformerBlock(d_model, n_heads)  # Q=piece, KV=board
         
         # To make markovian the combos done by the game
-        self.game_state_proj = nn.Linear(2, d_model)
+        self.game_state_proj = nn.Linear(4, d_model)
         
         # Per-placement value head ('Oculto' MLP), shared across the M placements.
         self.feature_scale = nn.Parameter(torch.tensor(10.0))
@@ -276,7 +276,7 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         piece_tok_per_placement = piece_toks[batch_indices, queue_idx] 
 
         # Game observation as a token so it adds to the board more info
-        gs = observations["game_state"]                          # (B, 2)
+        gs = observations["game_state"]                          # (B, 4)
         gs_tok = self.game_state_proj(gs)                        # (B, d)
         gs_tok = gs_tok.unsqueeze(1)                             # (B, 1, d)
         gs_tok_expanded = gs_tok.unsqueeze(1).expand(-1, M, -1, -1)  # (B, M, 1, d)

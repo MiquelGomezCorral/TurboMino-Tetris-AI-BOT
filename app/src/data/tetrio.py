@@ -34,9 +34,9 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, use_t
         Tuple: A tuple containing the training and testing data (x_train, x_test, y_train, y_test).
     """
     # ============== Load data ============== 
-    train_loader = load_tetrio_loader(CONFIG.tetrio_train)
-    test_loader = load_tetrio_loader(CONFIG.tetrio_test)
-    val_loader = load_tetrio_loader(CONFIG.tetrio_val)
+    train_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_train)
+    test_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_test)
+    val_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_val)
 
 
     return train_loader, test_loader, val_loader
@@ -75,6 +75,12 @@ class TetrioDataset(Dataset):
 
         searcher = MoveSearcher(game, self.CONFIG, self.T_CONFIG)
         _, features = searcher.get_all_features()
+        features['game_state'] = np.array([
+            float(row['combo'] - 1),
+            float(row['btb']),
+            float(row['immediate_garbage']),
+            float(row['incoming_garbage']),
+        ], dtype=np.float32)
 
         board = Board(game.width, game_h, game.vanish_zone, game.color_map,
                       row['playfield_next'][int(row['immediate_garbage'])*10:])

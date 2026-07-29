@@ -22,6 +22,8 @@ def cmd_train_ppo(args):
     print_separator("START TRAINING PPO", sep_type="START")
 
     CONFIG: Configuration = args_to_dataclass(args, Configuration)
+    if args.garbage_prob is not None:
+        CONFIG.garbage_prob = args.garbage_prob
     T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
     train_ppo_turbomino(CONFIG, T_CONFIG)
     print_separator("END TRAINING PPO", sep_type="START")
@@ -67,6 +69,7 @@ if __name__ == "__main__":
     p_train.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
     p_train.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
     p_train.add_argument("-MP","--model_path", type=str, default=None, help="Path to the trained model checkpoint (default: None)")
+    p_train.add_argument("--garbage_prob", type=float, default=None, help="Chance of receiving garbage after each placement (default: 0.0774)")
     p_train.set_defaults(func=cmd_train_ppo)
 
     # ======================================================================================

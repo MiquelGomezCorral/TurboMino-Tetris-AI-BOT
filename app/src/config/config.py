@@ -42,8 +42,8 @@ class Configuration:
     # ===================================================================
 
     seed:     int = 42
-    test_size: float = 0.2
-    val_size:  float = 0.1
+    test_size: float = 0.10
+    val_size:  float = 0.05
     batch_size: int = 256
     num_workers: int = 4
 
@@ -91,6 +91,20 @@ class Configuration:
 
     clear_lines_on_placement: bool = True
     use_heuristic_rewards: bool = True
+
+    garbage_prob: float = 0.0774
+    garbage_delay: int = 3
+    garbage_cap: int = 8
+    garbage_probs: list[float] = field(default_factory=lambda: [
+        0.263604,
+        0.155263,
+        0.099349,
+        0.151832,
+        0.145719,
+        0.087687,
+        0.032314,
+        0.064232,
+    ])
 
     curriculum: dict = field(default_factory=dict)  # {board_w: timesteps}, e.g. {4: 1_000_000, 6: 1_000_000, 8: 1_000_000, 10: 2_000_000}
 

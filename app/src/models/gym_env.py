@@ -19,8 +19,6 @@ class TetrisEnv(gym.Env):
         assert self.CONFIG.max_board_size_w >= self.T_CONFIG.board_w, "CONFIG.max_board_size_w must be >= T_CONFIG.board_w"
 
         self.evaluator = HeuristicEvaluator()
-        self.game = Tetris(width=self.T_CONFIG.board_w, height=self.T_CONFIG.board_h)
-        self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG)
 
         # 1. Action Space: Select an index from 0 to MAX_PLACEMENTS - 1
         self.action_space = spaces.Discrete(CONFIG.max_placements)
@@ -49,9 +47,10 @@ class TetrisEnv(gym.Env):
                 dtype=np.int64
             ),
             "game_state": spaces.Box(
-                low=np.array([0.0, 0.0]),
-                high=np.array([1.0, np.inf]),
-                shape=(2,),
+                # Game state features: [combo, b2b, immediate garbage, incoming garbage]
+                low=np.array([-1.0, 0.0, 0.0, 0.0], dtype=np.float32),
+                high=np.array([np.inf, np.inf, CONFIG.garbage_cap, np.inf], dtype=np.float32),
+                shape=(4,),
                 dtype=np.float32
             ),
             "placement_mask": spaces.Box(
@@ -101,7 +100,14 @@ class TetrisEnv(gym.Env):
         super().reset(seed=seed)
         
         # Initialize your engine
-        self.game = Tetris(width=self.T_CONFIG.board_w, height=self.T_CONFIG.board_h)
+        self.game = Tetris(
+            width=self.T_CONFIG.board_w,
+            height=self.T_CONFIG.board_h,
+            garbage_prob=self.CONFIG.garbage_prob,
+            garbage_delay=self.CONFIG.garbage_delay,
+            garbage_probs=self.CONFIG.garbage_probs,
+            garbage_cap=self.CONFIG.garbage_cap,
+        )
         self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG)
         
         obs = self._get_obs()

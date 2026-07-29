@@ -216,8 +216,10 @@ class MoveSearcher:
             "queue_idx": queue_idx_matrix,
             "placement_mask": self.valid_action_mask(),
             "game_state": np.array([
-                    float(self.game.get_b2b_active()),   # 0.0 or 1.0
-                    float(self.game.get_combo()),          # 0, 1, 2, ...
+                    float(self.game.get_combo()),              # 0, 1, 2, ...
+                    float(self.game.get_b2b_streak()),         # 0, 1, 2, ...
+                    float(self.game.get_immediate_garbage()),  # 0 to 8
+                    float(self.game.get_incoming_garbage())    # Any non-negative value
                 ], dtype=np.float32
             )
         }

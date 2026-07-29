@@ -1,3 +1,4 @@
+import math
 from enum import Enum
 
 class SpinType(Enum):
@@ -11,7 +12,7 @@ class ScoringSystem:
         self.level = 1
         self.lines_cleared_total = 0
         self.combo = -1
-        self.b2b_active = False
+        self.b2b_streak = 0
         self.last_move_name = ""
         self.total_all_clears = 0
         self.total_tetrises = 0
@@ -44,22 +45,27 @@ class ScoringSystem:
             # if spin != SpinType.NONE:
                 # self.score += (400 if spin == SpinType.REGULAR else 100) * self.level
             self.combo = -1
-            return
+            return 0
 
         self.combo += 1
+        was_b2b_active = self.b2b_streak > 0
         base = 0
         is_difficult = False
+        attack = 0
 
         if spin == SpinType.REGULAR:
             is_difficult = True
+            attack = (0, 2, 4, 6)[lines]
             if lines == 1: base = 800
             elif lines == 2: base = 1200
             elif lines == 3: base = 1600
         elif spin == SpinType.MINI:
             is_difficult = True
+            attack = (0, 0, 1)[lines]
             if lines == 1: base = 200
             elif lines == 2: base = 400
         else:
+            attack = (0, 0, 1, 2, 4)[lines]
             if lines == 1: base = 100
             elif lines == 2: base = 300
             elif lines == 3: base = 500
@@ -67,13 +73,18 @@ class ScoringSystem:
                 base = 800
                 is_difficult = True
 
-        if is_difficult and self.b2b_active:
+        if perfect_clear:
+            is_difficult = True
+
+        if is_difficult and was_b2b_active:
             base = int(base * 1.5)
 
+        surge = 0
         if is_difficult:
-            self.b2b_active = True
+            self.b2b_streak += 1
         else:
-            self.b2b_active = False
+            surge = self.b2b_streak if self.b2b_streak >= 4 else 0
+            self.b2b_streak = 0
 
         if perfect_clear:
             if lines == 1: base += 800
@@ -89,8 +100,21 @@ class ScoringSystem:
         if lines == 4:
             self.total_tetrises += 1
 
+        if is_difficult and was_b2b_active:
+            attack += 1
+        if attack > 0:
+            attack = int(attack * (1 + 0.25 * self.combo))
+        elif self.combo >= 2:
+            attack = int(math.log(1 + 1.25 * self.combo))
+        if perfect_clear:
+            attack += 5
+        return attack + surge
+
     def get_combo(self):
         return self.combo
 
     def get_b2b_active(self):
-        return self.b2b_active
+        return self.b2b_streak > 0
+
+    def get_b2b_streak(self):
+        return self.b2b_streak

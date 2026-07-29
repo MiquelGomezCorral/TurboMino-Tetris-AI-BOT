@@ -5,6 +5,18 @@ import enum
 
 from .scoring import SpinType, ScoringSystem
 
+
+DEFAULT_GARBAGE_PROBS = (
+    0.263604,
+    0.155263,
+    0.099349,
+    0.151832,
+    0.145719,
+    0.087687,
+    0.032314,
+    0.064232,
+)
+
 # ===================================================================
 #                       ENUMS
 # ===================================================================
@@ -416,6 +428,25 @@ class Board:
         drop_distance = piece.y - ghost_y
         piece.y = ghost_y
         return drop_distance
+
+    def add_garbage(self, lines: int = 1, hole: int = None) -> bool:
+        if lines <= 0:
+            return False
+
+        lines = min(lines, self.height)
+        hole = random.randrange(self.width) if hole is None else hole
+        overflow = bool(np.any(self.b_rows[-lines:]))
+        garbage_row = ((1 << self.width) - 1) & ~(1 << hole)
+
+        self.b_rows[lines:] = self.b_rows[:-lines]
+        self.b_rows[:lines] = garbage_row
+
+        if self.color_map:
+            self.c_rows[lines:] = self.c_rows[:-lines]
+            self.c_rows[:lines] = PieceEnum.G.value
+            self.c_rows[:lines, hole] = PieceEnum.N.value
+
+        return overflow
     
     def print_board(self, b_board=None, c_board=None, active_piece=None, include_vanish_zone=False):
         row_count = self.height if include_vanish_zone else self.visible_height
@@ -468,9 +499,13 @@ class Tetris:
     score_system: ScoringSystem
     last_action_was_rotation: bool
     last_kick_index: int
-
+    incoming_garbage: deque[tuple[int, int, int]]
+    garbage_prob: float
     game_over: bool
 
+    garbage_delay: int
+    garbage_probs: tuple[float, ...]
+    garbage_cap: int
 
     def __init__(
         self, 
@@ -480,12 +515,27 @@ class Tetris:
         next_pieces: str = None,
         active_piece: str = None,
         hold_piece: str = None,
+        garbage_delay: int = 3,
+        garbage_prob: float = 0.0774,
+        garbage_probs: list[float] | tuple[float, ...] = DEFAULT_GARBAGE_PROBS,
+        garbage_cap: int = 8,
     ):
+        assert 0 <= garbage_prob <= 1, "garbage_prob must be between 0 and 1"
+        assert garbage_delay >= 1, "garbage_delay must be at least 1"
+        assert len(garbage_probs) == 8, "garbage_probs must contain probabilities for 1 to 8 lines"
+        assert all(prob >= 0 for prob in garbage_probs) and sum(garbage_probs) > 0, (
+            "garbage_probs must contain positive weight"
+        )
+        assert garbage_cap > 0, "garbage_cap must be positive"
+
         self.width = width
         self.height = height
         self.vanish_zone = vanish_zone
         self.color_map = color_map
-
+        self.garbage_prob = garbage_prob
+        self.garbage_delay = garbage_delay
+        self.garbage_probs = tuple(garbage_probs)
+        self.garbage_cap = garbage_cap
         self.board = Board(width, height, vanish_zone, color_map, playfield)
         self.queue = Queue(next_pieces)
 
@@ -500,6 +550,7 @@ class Tetris:
         self.last_action_was_rotation = False
         self.last_kick_index = -1
         self.game_over = False
+        self.incoming_garbage = deque()
 
     def spawn_piece(self):
         self.active_piece.reset_piece(self.queue.pop_piece())
@@ -523,12 +574,19 @@ class Tetris:
             cleared_lines = self.board.lock_piece(self.active_piece)
             perfect_clear = cleared_lines > 0 and all(self.board.b_rows[i] == 0 for i in range(self.board.visible_height))
             
-            self.score_system.evaluate_drop(cleared_lines, spin, perfect_clear, drop_distance, hard_drop=True)
+            attack = self.score_system.evaluate_drop(cleared_lines, spin, perfect_clear, drop_distance, hard_drop=True)
+
+            overflow = False
+            # ONLY ADD GARBAGE IF THE 'MOVEMENTS ARE DONE'
+            if self.garbage_prob > 0:
+                overflow = self.manage_garbage(cleared_lines, attack)
 
             self.spawn_piece()
+            self.game_over = self.game_over or overflow
             self.can_hold = True
             self.last_action_was_rotation = False
             self.last_kick_index = -1
+
         elif action == ActionEnum.HOLD and self.can_hold:
             if self.hold_piece is None:
                 self.hold_piece = self.active_piece.type
@@ -543,7 +601,45 @@ class Tetris:
             self.board.move_piece_down(self.active_piece)
             self.last_action_was_rotation = False
 
+
         return cleared_lines
+
+    def manage_garbage(self, cleared_lines: int, attack: int) -> bool:
+        while attack > 0 and self.incoming_garbage:
+            lines, turns, hole = self.incoming_garbage.popleft()
+            cancelled = min(lines, attack)
+            attack -= cancelled
+            if lines > cancelled:
+                self.incoming_garbage.appendleft((lines - cancelled, turns, hole))
+
+        self.incoming_garbage = deque(
+            (lines, max(0, turns - 1), hole)
+            for lines, turns, hole in self.incoming_garbage
+        )
+
+        overflow = False
+        if cleared_lines == 0:
+            remaining_cap = self.garbage_cap
+            while self.incoming_garbage and self.incoming_garbage[0][1] == 0 and remaining_cap > 0:
+                lines, turns, hole = self.incoming_garbage.popleft()
+                added = min(lines, remaining_cap)
+                overflow = self.board.add_garbage(added, hole) or overflow
+                remaining_cap -= added
+                if lines > added:
+                    self.incoming_garbage.appendleft((lines - added, turns, hole))
+
+        # Garbage is queued after the turn, so it cannot be cancelled immediately.
+        self.randomly_add_garbage()
+        return overflow
+
+    def randomly_add_garbage(self):
+        if self.garbage_prob <= 0:
+            return
+
+        if random.random() < self.garbage_prob:
+            lines = random.choices(range(1, 9), weights=self.garbage_probs, k=1)[0]
+            hole = random.randrange(self.width)
+            self.incoming_garbage.append((lines, self.garbage_delay, hole))
 
     def get_board_state(self, include_vanish_zone=False):
         if include_vanish_zone:
@@ -597,7 +693,19 @@ class Tetris:
     
     def get_b2b_active(self):
         return self.score_system.get_b2b_active()
+
+    def get_b2b_streak(self):
+        return self.score_system.get_b2b_streak()
     
+    def get_immediate_garbage(self):
+        return min(
+            self.garbage_cap,
+            sum(lines for lines, turns, _ in self.incoming_garbage if turns <= 1),
+        )
+
+    def get_incoming_garbage(self):
+        return sum(lines for lines, _, _ in self.incoming_garbage)
+
     def get_lines_cleared(self):
         return self.score_system.lines_cleared_total
     def get_total_all_clears(self):
@@ -621,4 +729,4 @@ class Tetris:
         # print(f"Active Piece: {self.active_piece.type.name} at ({self.active_piece.x}, {self.active_piece.y}) with rotation {self.active_piece.rotation_state.name}")
         print(f"Act.: {self.active_piece.type.name} | Hold: {self.hold_piece.name if self.hold_piece else 'N'} | Next: {[p.name for p in self.queue.get_queue()]}")
         # print(f"Can Hold: {self.can_hold}")
-        print(f"Combo: {self.score_system.combo if self.score_system.combo >= 0 else '---':<5}  |  B2B: {' ON' if self.score_system.b2b_active else 'OFF'} |  Last Move: {self.score_system.last_move_name if self.score_system.last_move_name else '---':<15} | Total All Clears: {self.score_system.total_all_clears: <5}")
+        print(f"Combo: {self.score_system.combo if self.score_system.combo >= 0 else '---':<5}  |  B2B: {self.score_system.b2b_streak:<3} |  Last Move: {self.score_system.last_move_name if self.score_system.last_move_name else '---':<15} | Total All Clears: {self.score_system.total_all_clears: <5}")
