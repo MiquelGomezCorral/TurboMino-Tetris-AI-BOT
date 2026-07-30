@@ -10,6 +10,16 @@ from .test import test_on_game
 # Callbacks for Stable Baselines3 training
 # ==========================================
 
+def _curriculum_gate_passed(rewards, pieces, max_pieces: int, learned_ratio: float, min_reward: float):
+    reward_ratio = np.mean([reward > min_reward for reward in rewards])
+    survival_ratio = np.mean([piece >= max_pieces for piece in pieces])
+    pass_ratio = np.mean([
+        reward > min_reward and piece >= max_pieces
+        for reward, piece in zip(rewards, pieces)
+    ])
+    return pass_ratio >= learned_ratio, reward_ratio, survival_ratio, pass_ratio
+
+
 class ProgressBarCallback(BaseCallback):
     def __init__(self, total_timesteps: int, n_steps: int, n_envs: int = 1):
         super().__init__(verbose=0)
@@ -68,17 +78,24 @@ class ProgressBarCallback(BaseCallback):
 
 
 class TetrisValidationCallback(BaseCallback):
-    def __init__(self, eval_env, eval_freq: int = 10000, n_eval_episodes: int = 5, max_pieces: int = 100, verbose: int = 1):
+    def __init__(
+        self, eval_env, eval_freq: int = 10000, n_eval_episodes: int = 5,
+        max_pieces: int = 100, learned_ratio: float | None = None,
+        min_reward: float = 0.0, verbose: int = 1,
+    ):
         super().__init__(verbose)
         self.eval_env = eval_env
         self.eval_freq = eval_freq
         self.n_eval_episodes = n_eval_episodes
         self.max_pieces = max_pieces
+        self.learned_ratio = learned_ratio
+        self.min_reward = min_reward
         self.best_mean_score = -np.inf
+        self.learned = False
 
     def _on_step(self) -> bool:
         if self.n_calls % self.eval_freq == 0 and self.n_calls > 0:
-            scores, lines, pieces, all_clears, tetrises = test_on_game(
+            rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
                 n_eval_episodes=self.n_eval_episodes,
                 max_pieces=self.max_pieces,
                 eval_env=self.eval_env,
@@ -86,11 +103,26 @@ class TetrisValidationCallback(BaseCallback):
             )
 
             mean_score = np.mean(scores)
+            self.logger.record("val/mean_reward", np.mean(rewards))
             self.logger.record("val/mean_score", mean_score)
             self.logger.record("val/mean_lines_cleared", np.mean(lines))
             self.logger.record("val/mean_pieces_placed", np.mean(pieces))
             self.logger.record("val/mean_all_clears", np.mean(all_clears))
             self.logger.record("val/mean_tetrises", np.mean(tetrises))
+
+            if self.learned_ratio is not None:
+                self.learned, reward_ratio, survival_ratio, pass_ratio = _curriculum_gate_passed(
+                    rewards, pieces, self.max_pieces, self.learned_ratio, self.min_reward,
+                )
+                self.logger.record("curriculum/reward_ratio", reward_ratio)
+                self.logger.record("curriculum/survival_ratio", survival_ratio)
+                self.logger.record("curriculum/pass_ratio", pass_ratio)
+                if self.learned:
+                    print(
+                        f"\n - Curriculum gate passed: reward={reward_ratio:.2%}, "
+                        f"survival={survival_ratio:.2%}, pass={pass_ratio:.2%}"
+                    )
+                    return False
 
             if mean_score > self.best_mean_score:
                 self.best_mean_score = mean_score
@@ -136,7 +168,7 @@ class TetrisEvalCallback(pl.Callback):
             return
 
         # Extract the encoder and run actual game episodes
-        scores, lines, pieces, all_clears, tetrises = test_on_game(
+        rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
             n_eval_episodes=self.n_eval_episodes,
             max_pieces=self.max_pieces,
             eval_env=self.eval_env,
@@ -144,6 +176,7 @@ class TetrisEvalCallback(pl.Callback):
         )
 
         mean_score = np.mean(scores)
+        pl_module.log("game/mean_reward",         np.mean(rewards))
         pl_module.log("game/mean_score",         mean_score,       prog_bar=True)
         pl_module.log("game/mean_lines_cleared",  np.mean(lines))
         pl_module.log("game/mean_pieces_placed",  np.mean(pieces))
@@ -155,5 +188,3 @@ class TetrisEvalCallback(pl.Callback):
             ckpt_path = f"{trainer.logger.log_dir}/best_game_model.ckpt"
             trainer.save_checkpoint(ckpt_path)
             print(f"\n - New best game score: {mean_score:.2f}! Saved to {ckpt_path}")
-
-

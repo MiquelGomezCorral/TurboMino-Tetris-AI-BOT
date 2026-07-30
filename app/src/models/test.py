@@ -26,12 +26,13 @@ def test_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
 
     print_separator("Test Classifier on Game")
     eval_env = make_eval_env(CONFIG, T_CONFIG)
-    scores, lines, pieces, all_clears, tetrises = test_on_game(
+    rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
         n_eval_episodes=CONFIG.eval_episodes,
         max_pieces=CONFIG.max_eval_pieces,
         eval_env=eval_env,
         model=model,
     )
+    print(f" - Average Reward: {sum(rewards) / len(rewards):.2f}")
     print(f" - Average Score: {sum(scores) / len(scores):.2f}")
     print(f" - Average Lines Cleared: {sum(lines) / len(lines):.2f}")
     print(f" - Average Pieces Placed: {sum(pieces) / len(pieces):.2f}")
@@ -81,6 +82,7 @@ def test_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, model=None
 
 def test_on_game(n_eval_episodes: int, max_pieces: int, eval_env: TetrisEnv, model):
 
+    rewards = []
     scores = []
     lines = []
     pieces = []
@@ -91,6 +93,7 @@ def test_on_game(n_eval_episodes: int, max_pieces: int, eval_env: TetrisEnv, mod
         obs, _ = eval_env.reset()
         done = False
         pieces_placed = 0
+        total_reward = 0.0
 
         while not done and pieces_placed < max_pieces:
             action_masks = eval_env.unwrapped.valid_action_mask()
@@ -98,14 +101,16 @@ def test_on_game(n_eval_episodes: int, max_pieces: int, eval_env: TetrisEnv, mod
                 obs, action_masks=action_masks, deterministic=True
             )
             obs, reward, terminated, truncated, info = eval_env.step(action)
+            total_reward += reward
             pieces_placed += 1
             done = terminated or truncated
 
         game = eval_env.unwrapped.game
+        rewards.append(total_reward)
         scores.append(game.get_score())
         lines.append(game.get_lines_cleared())
         pieces.append(pieces_placed)
         all_clears.append(game.get_total_all_clears())
         tetrises.append(game.get_total_tetrises())
 
-    return scores, lines, pieces, all_clears, tetrises
+    return rewards, scores, lines, pieces, all_clears, tetrises

@@ -24,7 +24,8 @@ def _make_linear_schedule(start: float, end: float):
 def _run_stage(
     model, CONFIG: Configuration, T_CONFIG: TetrisConfiguration,
     eval_env, stage_timesteps: int,
-    total_timesteps: int, stage_label: str | None = None
+    total_timesteps: int, stage_label: str | None = None,
+    use_curriculum_gate: bool = False,
 ):
     progress = ProgressBarCallback(
         total_timesteps=stage_timesteps,
@@ -50,6 +51,8 @@ def _run_stage(
         eval_freq=CONFIG.save_freq,
         n_eval_episodes=CONFIG.eval_episodes,
         max_pieces=CONFIG.max_eval_pieces,
+        learned_ratio=CONFIG.curriculum_learned_ratio if use_curriculum_gate else None,
+        min_reward=CONFIG.curriculum_min_eval_reward,
     )
 
     ent_anneal = EntropyAnnealCallback(
@@ -58,14 +61,17 @@ def _run_stage(
         total_timesteps=total_timesteps,
     )
 
+    callbacks = [progress, checkpoint, validation, ent_anneal]
+
     try:
         model.learn(
             total_timesteps=stage_timesteps,
-            callback=[progress, checkpoint, validation, ent_anneal],
+            callback=callbacks,
             reset_num_timesteps=False,
         )
     except KeyboardInterrupt:
         print(f"\n - Stage interrupted by user (step {model.num_timesteps:_}).")
+    return not use_curriculum_gate or validation.learned
 
 
 # ==========================================
@@ -114,7 +120,10 @@ def train_ppo_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         else:
             model.set_env(env)
 
-        _run_stage(model, CONFIG, T_CONFIG, eval_env, stage_time, total_curriculum, stage_label)
+        learned = _run_stage(
+            model, CONFIG, T_CONFIG, eval_env, stage_time, total_curriculum, stage_label,
+            use_curriculum_gate=bool(CONFIG.curriculum),
+        )
 
         stage_path = os.path.join(
             CONFIG.MODELS_PATH,
@@ -122,7 +131,9 @@ def train_ppo_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         )
         model.save(stage_path)
         print(f" - Stage model saved: {stage_path}")
+        if CONFIG.curriculum and not learned:
+            print_warn(f"Curriculum stopped: {stage_label} did not pass the learning gate.")
+            break
 
     model.save(CONFIG.final_model_path)
     print(f" - Final model saved to {CONFIG.final_model_path}")
-

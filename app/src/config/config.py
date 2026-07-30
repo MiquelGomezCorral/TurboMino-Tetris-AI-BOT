@@ -93,7 +93,9 @@ class Configuration:
 
     save_freq: int = 50_000
     eval_episodes: int = 100
-    max_eval_pieces: int = 1000
+    max_eval_pieces: int = 200
+    curriculum_learned_ratio: float = 0.9
+    curriculum_min_eval_reward: float = 0.0
 
     total_timesteps: int = 5_000_000
 

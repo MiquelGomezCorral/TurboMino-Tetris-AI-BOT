@@ -26,6 +26,10 @@ n_envs: 4
 verbose: 0
 
 save_freq: 25000
+eval_episodes: 100
+max_eval_pieces: 1000
+curriculum_learned_ratio: 0.5
+curriculum_min_eval_reward: 0.0
 
 total_timesteps: 5000000
 
