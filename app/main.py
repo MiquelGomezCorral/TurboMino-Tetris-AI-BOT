@@ -7,11 +7,12 @@ from src.tetris import TetrisConfiguration
 from maikol_utils.other_utils import args_to_dataclass
 from maikol_utils.print_utils import print_separator
 
-from scripts import play_tetris_game, showcase_model
 from src.models import train_ppo_turbomino, train_tetrio_turbomino
 
 def cmd_play_tetris(args: argparse.Namespace):
     """Call play_tetris_from_config_list with the given args."""
+    from scripts.play_tetris import play_tetris_game
+
     CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
     print_separator("START TETRIS", sep_type="START")
     play_tetris_game(CONFIG)
@@ -36,6 +37,8 @@ def cmd_train_tetrio(args):
 
 def cmd_showcase(args):
     """Call showcase functions."""
+    from scripts.showcase import showcase_model
+
     print_separator("START SHOWCASE", sep_type="START")
     CONFIG: Configuration = args_to_dataclass(args, Configuration)
     T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
@@ -66,7 +69,7 @@ if __name__ == "__main__":
     p_train = subparsers.add_parser("train-ppo", help="Train the PPO model")
     p_train.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
     p_train.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
-    p_train.add_argument("-MP","--model_path", type=str, default=None, help="Path to the trained model checkpoint (default: None)")
+    p_train.add_argument("-MP", "--resume_model_path", type=str, default=None, help="PPO checkpoint to resume (default: fresh training)")
     p_train.add_argument("--garbage_prob", type=float, default=None, help=f"Chance of receiving garbage after each placement (default: {Configuration.garbage_prob})")
     p_train.set_defaults(func=cmd_train_ppo)
 

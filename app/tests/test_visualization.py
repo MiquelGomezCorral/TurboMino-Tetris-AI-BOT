@@ -2,7 +2,8 @@ import unittest
 
 import pygame
 
-from src.tetris import PieceEnum, TetrisConfiguration, draw_garbage_bar
+from src.tetris import PieceEnum, TetrisConfiguration
+from src.tetris.visualization import draw_garbage_bar
 
 
 class VisualizationTests(unittest.TestCase):

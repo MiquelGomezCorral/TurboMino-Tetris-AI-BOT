@@ -1,7 +1,8 @@
 import pygame
 import sys
 
-from src.tetris import Tetris, PieceEnum, ActionEnum, draw_cell, draw_garbage_bar, draw_ui_piece, draw_text, TetrisConfiguration
+from src.tetris import Tetris, PieceEnum, ActionEnum, TetrisConfiguration
+from src.tetris.visualization import draw_cell, draw_garbage_bar, draw_ui_piece, draw_text
 
 def play_tetris_game(CONFIG: TetrisConfiguration):
     pygame.init()
@@ -19,8 +20,14 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
     # DAS/ARR state: key_code -> (last_action_time, das_started)
     das_state = {}
     das_actions = {}
-    action_by_key = {v: k for k, v in CONFIG.keys.items()}
-    for action_name, key_code in CONFIG.keys.items():
+    keys = {
+        "LEFT": pygame.K_a, "RIGHT": pygame.K_s, "SOFT_DROP": pygame.K_r,
+        "ROTATE_CCW": pygame.K_LEFT, "ROTATE_CW": pygame.K_RIGHT,
+        "ROTATE_180": pygame.K_UP, "DROP": pygame.K_SPACE, "HOLD": pygame.K_w,
+        "RESET": pygame.K_p, "QUIT": pygame.K_q,
+    }
+    action_by_key = {v: k for k, v in keys.items()}
+    for action_name, key_code in keys.items():
         if action_name == "LEFT":
             das_actions[key_code] = lambda piece: game.board.move_piece_left(piece)
         elif action_name == "RIGHT":
@@ -38,12 +45,12 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
             
             # --- Input Handling ---
             elif event.type == pygame.KEYDOWN:
-                if event.key == CONFIG.keys.get("RESET"):
+                if event.key == keys["RESET"]:
                     game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, color_map=True)
                     das_state.clear()
                     continue
 
-                if event.key == CONFIG.keys.get("QUIT"):
+                if event.key == keys["QUIT"]:
                     running = False
                     continue
 

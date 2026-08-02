@@ -7,7 +7,7 @@ from maikol_utils.print_utils import print_warn
 
 from src.config import Configuration
 from .tetris import ActionEnum, Board, ActivePiece, PieceEnum, RotationEnum, Tetris, _clear_bitmap
-from .visualization import TetrisConfiguration
+from .configuration import TetrisConfiguration
 
 
 class MoveSearcher:
@@ -226,22 +226,6 @@ class MoveSearcher:
             "game_state": np.asarray(game_state, dtype=np.float32),
         }
     
-
-    def _extract_features(self, bitmap_array: np.ndarray) -> np.ndarray:
-        # 1. Create a 1D array of bit-shifts for each column (0 to width-1)
-        # If column 0 is the highest bit (MSB), use: self.T_CONFIG.board_w - 1 - np.arange(self.T_CONFIG.board_w)
-        # If column 0 is the lowest bit (LSB), use: np.arange(self.T_CONFIG.board_w)
-        shifts = np.arange(self.T_CONFIG.board_w, dtype=np.uint32)
-        
-        # 2. Use broadcasting to shift every row's bits and check the lowest bit (& 1)
-        # bitmap_array[:, None] reshapes to (height, 1)
-        # shifts[None, :] reshapes to (1, width)
-        # Resulting matrix shape: (height, width)
-        unpacked_2d = (bitmap_array[:, None] >> shifts) & 1
-        
-        # 3. Flatten and cast directly to float32 for your Neural Network
-        return unpacked_2d.ravel().astype(np.float32)
-
 
     def _extract_features_2d(self, bitmap_array: np.ndarray) -> np.ndarray:
         """

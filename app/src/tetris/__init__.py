@@ -1,7 +1,7 @@
 
 from .tetris import Board, PieceEnum, Queue, ActionEnum, ActivePiece, Tetris, RotationEnum, ROTATION_DIR, _clear_bitmap, PIECE_MAPPING
 from .scoring import SpinType, ScoringSystem
-from .visualization import draw_cell, draw_garbage_bar, draw_ui_piece, draw_text, TetrisConfiguration
+from .configuration import TetrisConfiguration
 
 from .algorithms import MoveSearcher
 
