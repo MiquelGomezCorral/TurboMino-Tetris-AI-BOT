@@ -656,17 +656,6 @@ class Tetris:
         else:
             return self.board.b_rows[:self.board.visible_height].copy()
 
-    def get_active_piece_info(self):
-        return {
-            'type': self.active_piece.type,
-            'x': self.active_piece.x,
-            'y': self.active_piece.y,
-            'rotation': self.active_piece.rotation_state
-        }
-
-    def get_swappable_hold(self):
-        return self.hold_piece
-
     def get_swap_piece(self):
         return self.hold_piece
 
@@ -690,9 +679,6 @@ class Tetris:
     
     def get_hold_piece_type(self):
         return self.hold_piece.value if self.hold_piece else PieceEnum.N.value
-    
-    def get_next_pieces_types(self, n=5):
-        return [p.value for p in list(self.queue.get_queue())[:n]]
     
     def get_next_piece_type(self):
         return self.queue.peek_piece().value

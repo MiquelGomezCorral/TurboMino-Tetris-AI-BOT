@@ -1,4 +1,6 @@
 from tqdm import tqdm
+import random
+import numpy as np
 import torch
 import pytorch_lightning as pl
 
@@ -31,11 +33,12 @@ def test_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         max_pieces=CONFIG.max_eval_pieces,
         eval_env=eval_env,
         model=model,
+        seed=CONFIG.eval_seed,
     )
     print(f" - Average Reward: {sum(rewards) / len(rewards):.2f}")
     print(f" - Average Score: {sum(scores) / len(scores):.2f}")
     print(f" - Average Lines Cleared: {sum(lines) / len(lines):.2f}")
-    print(f" - Average Pieces Placed: {sum(pieces) / len(pieces):.2f}")
+    print(f" - Pieces Placed: min={min(pieces)}, avg={sum(pieces) / len(pieces):.2f}, max={max(pieces)}")
     print(f" - Average All Clears: {sum(all_clears) / len(all_clears):.2f}")
     print(f" - Average Tetrises: {sum(tetrises) / len(tetrises):.2f}")
     
@@ -80,7 +83,7 @@ def test_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, model=None
     return [{'test/acc_top1': acc_top1, 'test/acc_top3': acc_top3}]
 
 
-def test_on_game(n_eval_episodes: int, max_pieces: int, eval_env: TetrisEnv, model):
+def test_on_game(n_eval_episodes: int, max_pieces: int, eval_env: TetrisEnv, model, seed: int | None = None):
 
     rewards = []
     scores = []
@@ -89,28 +92,36 @@ def test_on_game(n_eval_episodes: int, max_pieces: int, eval_env: TetrisEnv, mod
     all_clears = []
     tetrises = []
 
-    for _ in tqdm(range(n_eval_episodes), desc="Evaluating"):
-        obs, _ = eval_env.reset()
-        done = False
-        pieces_placed = 0
-        total_reward = 0.0
+    python_state = random.getstate() if seed is not None else None
+    numpy_state = np.random.get_state() if seed is not None else None
+    try:
+        for episode in tqdm(range(n_eval_episodes), desc="Evaluating"):
+            episode_seed = seed + episode if seed is not None else None
+            obs, _ = eval_env.reset(seed=episode_seed)
+            done = False
+            pieces_placed = 0
+            total_reward = 0.0
 
-        while not done and pieces_placed < max_pieces:
-            action_masks = eval_env.unwrapped.valid_action_mask()
-            action, _ = model.predict(
-                obs, action_masks=action_masks, deterministic=True
-            )
-            obs, reward, terminated, truncated, info = eval_env.step(action)
-            total_reward += reward
-            pieces_placed += 1
-            done = terminated or truncated
+            while not done and pieces_placed < max_pieces:
+                action_masks = eval_env.unwrapped.valid_action_mask()
+                action, _ = model.predict(
+                    obs, action_masks=action_masks, deterministic=True
+                )
+                obs, reward, terminated, truncated, info = eval_env.step(action)
+                total_reward += reward
+                pieces_placed += 1
+                done = terminated or truncated
 
-        game = eval_env.unwrapped.game
-        rewards.append(total_reward)
-        scores.append(game.get_score())
-        lines.append(game.get_lines_cleared())
-        pieces.append(pieces_placed)
-        all_clears.append(game.get_total_all_clears())
-        tetrises.append(game.get_total_tetrises())
+            game = eval_env.unwrapped.game
+            rewards.append(total_reward)
+            scores.append(game.get_score())
+            lines.append(game.get_lines_cleared())
+            pieces.append(pieces_placed)
+            all_clears.append(game.get_total_all_clears())
+            tetrises.append(game.get_total_tetrises())
+    finally:
+        if seed is not None:
+            random.setstate(python_state)
+            np.random.set_state(numpy_state)
 
     return rewards, scores, lines, pieces, all_clears, tetrises

@@ -233,7 +233,7 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
 
         # The two cross-attention heads bridging the CNN and the piece embeddings.
         self.board_to_piece = TransformerBlock(d_model, n_heads)  # Q=board, KV=piece
-        self.piece_to_board = TransformerBlock(d_model, n_heads)  # Q=piece, KV=board
+        # self.piece_to_board = TransformerBlock(d_model, n_heads)  # Q=piece, KV=board
         
         # To make markovian the combos done by the game
         self.game_state_proj = nn.Linear(4, d_model)

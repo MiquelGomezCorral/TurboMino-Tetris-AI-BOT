@@ -2,7 +2,6 @@ from tqdm import tqdm
 from stable_baselines3.common.callbacks import BaseCallback
 import numpy as np
 import time
-import pytorch_lightning as pl
 
 from .test import test_on_game
 
@@ -10,27 +9,26 @@ from .test import test_on_game
 # Callbacks for Stable Baselines3 training
 # ==========================================
 
-def _curriculum_gate_passed(rewards, pieces, max_pieces: int, learned_ratio: float, min_reward: float):
-    reward_ratio = np.mean([reward > min_reward for reward in rewards])
+def _curriculum_gate_passed(scores, pieces, max_pieces: int, learned_ratio: float, min_score: float):
+    score_ratio = np.mean([score >= min_score for score in scores])
     survival_ratio = np.mean([piece >= max_pieces for piece in pieces])
-    pass_ratio = np.mean([
-        reward > min_reward and piece >= max_pieces
-        for reward, piece in zip(rewards, pieces)
-    ])
-    return pass_ratio >= learned_ratio, reward_ratio, survival_ratio, pass_ratio
+    return score_ratio >= learned_ratio and survival_ratio >= learned_ratio, score_ratio, survival_ratio
 
 
 class ProgressBarCallback(BaseCallback):
-    def __init__(self, total_timesteps: int, n_steps: int, n_envs: int = 1):
+    def __init__(self, total_timesteps: int, rollout_steps: int, n_envs: int = 1):
         super().__init__(verbose=0)
         self.total = total_timesteps
-        self.n_steps = n_steps
+        self.rollout_steps = rollout_steps
         self.n_envs = n_envs
         self.last_update = 0
         self._start_time = None
+        self._start_timesteps = 0
 
     def _on_training_start(self):
         self._start_time = time.time()
+        self._start_timesteps = self.num_timesteps
+        self.last_update = self.num_timesteps
         self.pbar = tqdm(
             total=self.total,
             unit="st",
@@ -41,14 +39,14 @@ class ProgressBarCallback(BaseCallback):
     def _on_step(self):
         self.pbar.update(self.n_envs)
         n = self.num_timesteps
-        if n - self.last_update >= self.n_steps:
+        if n - self.last_update >= self.rollout_steps * self.n_envs:
             self.last_update = n
             self._update_postfix()
         return True
 
     def _on_rollout_end(self):
-        it = getattr(self.model, "_n_updates", 0) + 1
-        self.pbar.set_description(f"Iter {it}")
+        rollout = self.num_timesteps // (self.rollout_steps * self.n_envs)
+        self.pbar.set_description(f"Rollout {rollout}")
         self._update_postfix()
 
     def _update_postfix(self):
@@ -59,7 +57,8 @@ class ProgressBarCallback(BaseCallback):
         length = np.mean([e["l"] for e in buf]) if buf else 0.0
 
         elapsed = time.time() - self._start_time if self._start_time else 1.0
-        fps = int(self.num_timesteps / elapsed) if elapsed > 0 else 0
+        stage_steps = self.num_timesteps - self._start_timesteps
+        fps = int(stage_steps / elapsed) if elapsed > 0 else 0
 
         pc = {
             "rew": f"{rew:.1f}",
@@ -81,7 +80,8 @@ class TetrisValidationCallback(BaseCallback):
     def __init__(
         self, eval_env, eval_freq: int = 10000, n_eval_episodes: int = 5,
         max_pieces: int = 100, learned_ratio: float | None = None,
-        min_reward: float = 0.0, verbose: int = 1,
+        min_score: float = 0.0, eval_seed: int | None = None,
+        best_model_path: str | None = None, verbose: int = 1,
     ):
         super().__init__(verbose)
         self.eval_env = eval_env
@@ -89,8 +89,11 @@ class TetrisValidationCallback(BaseCallback):
         self.n_eval_episodes = n_eval_episodes
         self.max_pieces = max_pieces
         self.learned_ratio = learned_ratio
-        self.min_reward = min_reward
-        self.best_mean_score = -np.inf
+        self.min_score = min_score
+        self.eval_seed = eval_seed
+        self.best_model_path = best_model_path
+        self.saved_best_model_path = None
+        self.best_key = None
         self.learned = False
 
     def _on_step(self) -> bool:
@@ -100,36 +103,54 @@ class TetrisValidationCallback(BaseCallback):
                 max_pieces=self.max_pieces,
                 eval_env=self.eval_env,
                 model=self.model,
+                seed=self.eval_seed,
             )
 
             mean_score = np.mean(scores)
             self.logger.record("val/mean_reward", np.mean(rewards))
+            self.logger.record("val/min_score", np.min(scores))
             self.logger.record("val/mean_score", mean_score)
+            self.logger.record("val/max_score", np.max(scores))
             self.logger.record("val/mean_lines_cleared", np.mean(lines))
+            self.logger.record("val/min_pieces_placed", np.min(pieces))
             self.logger.record("val/mean_pieces_placed", np.mean(pieces))
+            self.logger.record("val/max_pieces_placed", np.max(pieces))
             self.logger.record("val/mean_all_clears", np.mean(all_clears))
             self.logger.record("val/mean_tetrises", np.mean(tetrises))
 
+            summary = (
+                f"Validation @ {self.num_timesteps:_}: "
+                f"score min/avg/max={min(scores):.0f}/{mean_score:.1f}/{max(scores):.0f} | "
+                f"pieces min/avg/max={min(pieces)}/{np.mean(pieces):.1f}/{max(pieces)}"
+            )
             if self.learned_ratio is not None:
-                self.learned, reward_ratio, survival_ratio, pass_ratio = _curriculum_gate_passed(
-                    rewards, pieces, self.max_pieces, self.learned_ratio, self.min_reward,
+                self.learned, score_ratio, survival_ratio = _curriculum_gate_passed(
+                    scores, pieces, self.max_pieces, self.learned_ratio, self.min_score,
                 )
-                self.logger.record("curriculum/reward_ratio", reward_ratio)
+                self.logger.record("curriculum/score_ratio", score_ratio)
                 self.logger.record("curriculum/survival_ratio", survival_ratio)
-                self.logger.record("curriculum/pass_ratio", pass_ratio)
-                if self.learned:
-                    print(
-                        f"\n - Curriculum gate passed: reward={reward_ratio:.2%}, "
-                        f"survival={survival_ratio:.2%}, pass={pass_ratio:.2%}"
-                    )
-                    return False
+                self.logger.record("curriculum/gate_passed", self.learned)
+                best_key = (
+                    (1, mean_score) if self.learned
+                    else (0, min(score_ratio, survival_ratio), mean_score)
+                )
+                summary += f" | score pass={score_ratio:.0%}, survival={survival_ratio:.0%}"
+            else:
+                best_key = (mean_score,)
 
-            if mean_score > self.best_mean_score:
-                self.best_mean_score = mean_score
-                save_path = f"{self.model.tensorboard_log}/best_model"
-                self.model.save(save_path)
+            tqdm.write(summary)
+
+            if self.best_key is None or best_key > self.best_key:
+                self.best_key = best_key
+                self.best_model_path = self.best_model_path or f"{self.model.tensorboard_log}/best_model.zip"
+                self.model.save(self.best_model_path)
+                self.saved_best_model_path = self.best_model_path
                 if self.verbose > 0:
                     print(f"\n - New best validation score: {mean_score:.2f}! Model saved.")
+
+            if self.learned:
+                tqdm.write("Curriculum gate passed.")
+                return False
 
         return True
 
@@ -148,43 +169,3 @@ class EntropyAnnealCallback(BaseCallback):
         progress = min(1.0, self.model.num_timesteps / self.total)
         self.model.ent_coef = self.end + (self.start - self.end) * (1.0 - progress)
         return True
-    
-
-# ==========================================
-# Callbacks for PyTorch Lightning training 
-# ==========================================
-
-class TetrisEvalCallback(pl.Callback):
-    def __init__(self, eval_env, eval_freq: int = 1, n_eval_episodes: int = 5, max_pieces: int = 100):
-        super().__init__()
-        self.eval_env = eval_env
-        self.eval_freq = eval_freq
-        self.n_eval_episodes = n_eval_episodes
-        self.max_pieces = max_pieces
-        self.best_mean_score = -np.inf
-
-    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        if trainer.current_epoch % self.eval_freq != 0:
-            return
-
-        # Extract the encoder and run actual game episodes
-        rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
-            n_eval_episodes=self.n_eval_episodes,
-            max_pieces=self.max_pieces,
-            eval_env=self.eval_env,
-            model=pl_module,       # your TurboMinoModule
-        )
-
-        mean_score = np.mean(scores)
-        pl_module.log("game/mean_reward",         np.mean(rewards))
-        pl_module.log("game/mean_score",         mean_score,       prog_bar=True)
-        pl_module.log("game/mean_lines_cleared",  np.mean(lines))
-        pl_module.log("game/mean_pieces_placed",  np.mean(pieces))
-        pl_module.log("game/mean_all_clears",  np.mean(all_clears))
-        pl_module.log("game/mean_tetrises",  np.mean(tetrises))
-
-        if mean_score > self.best_mean_score:
-            self.best_mean_score = mean_score
-            ckpt_path = f"{trainer.logger.log_dir}/best_game_model.ckpt"
-            trainer.save_checkpoint(ckpt_path)
-            print(f"\n - New best game score: {mean_score:.2f}! Saved to {ckpt_path}")

@@ -1,9 +1,9 @@
 import gymnasium as gym
+import random
 from gymnasium import spaces
 import numpy as np
-from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, HeuristicEvaluator
 from src.config import Configuration
@@ -23,13 +23,6 @@ class TetrisEnv(gym.Env):
         # 1. Action Space: Select an index from 0 to MAX_PLACEMENTS - 1
         self.action_space = spaces.Discrete(CONFIG.max_placements)
         
-        # 2. Observation Space: Example using a flattened 10x20 binary grid
-        # Shape is (50, 200). Each row is a potential future board state.
-        self.board_features = T_CONFIG.board_w *  (self.T_CONFIG.board_h + self.T_CONFIG.vanish_zone)
-        self.context_features = T_CONFIG.max_pieces_in_view * T_CONFIG.num_piece_categories # 56
-        
-        self.total_features = self.board_features + self.context_features
-
         self.observation_space = spaces.Dict({
             "boards": spaces.Box(
                 low=0.0, high=1.0, 
@@ -68,8 +61,12 @@ class TetrisEnv(gym.Env):
     def step(self, action):
         # =========== 1. Execute the sequence chosen by the neural network =========== 
         chosen_placement, _ = self.all_placements[action]
-        
+
         reward = self.game.get_score()
+        heuristic_before = (
+            self.evaluator.evaluate(self.game.board).compute_total()
+            if self.CONFIG.use_heuristic_rewards else 0.0
+        )
         for act in chosen_placement['sequence']:
             self.game.move_active_piece(act)
 
@@ -81,11 +78,12 @@ class TetrisEnv(gym.Env):
         # ===========  3. Calculate Reward =========== 
         if terminated:
             # Penalize death — large negative reward so the model learns to survive
-            reward = self.T_CONFIG.death_penalty
+            reward = self.CONFIG.death_penalty
         else: 
-            reward = self.game.get_score() - reward + self.T_CONFIG.alive_bonus # Reward is the score difference after the move
+            reward = self.game.get_score() - reward + self.CONFIG.alive_bonus # Reward is the score difference after the move
             if self.CONFIG.use_heuristic_rewards:
-                reward += self.evaluator.evaluate(self.game.board).compute_total()
+                # Reward board improvement, not its cumulative penalty.
+                reward += self.evaluator.evaluate(self.game.board).compute_total() - heuristic_before
 
         reward = np.sign(reward) * np.sqrt(np.abs(reward)) / 10.0
 
@@ -98,6 +96,9 @@ class TetrisEnv(gym.Env):
     
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
         
         # Initialize your engine
         self.game = Tetris(
@@ -129,6 +130,9 @@ class TetrisEnv(gym.Env):
         True = Valid Move | False = Padded/Illegal Move
         """
         return self.searcher.valid_action_mask()
+
+    def action_masks(self):
+        return self.valid_action_mask()
     
 
     def get_game(self) -> Tetris:
@@ -140,23 +144,15 @@ class TetrisEnv(gym.Env):
 # ==========================================
 # 2. Env factories
 # ==========================================
-def mask_fn(env: gym.Env):
-    return env.unwrapped.valid_action_mask()
-
-
 def make_train_env(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
     if CONFIG.n_envs > 1:
-        return DummyVecEnv([
-            lambda: ActionMasker(Monitor(TetrisEnv(CONFIG, T_CONFIG)), mask_fn)
-            for _ in range(CONFIG.n_envs)
-        ])
+        def make_env():
+            return Monitor(TetrisEnv(CONFIG, T_CONFIG))
+
+        return SubprocVecEnv([make_env for _ in range(CONFIG.n_envs)])
     env = TetrisEnv(CONFIG, T_CONFIG)
-    env = Monitor(env)
-    env = ActionMasker(env, mask_fn)
-    return env
+    return Monitor(env)
 
 
 def make_eval_env(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
-    env = TetrisEnv(CONFIG, T_CONFIG)
-    env = ActionMasker(env, mask_fn)
-    return env
+    return TetrisEnv(CONFIG, T_CONFIG)

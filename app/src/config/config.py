@@ -4,6 +4,7 @@ Configuration of project variables that we want to have available
 everywhere and considered configuration.
 """
 import os
+import math
 from dataclasses import dataclass, field
 
 from maikol_utils.file_utils import make_dirs
@@ -39,6 +40,7 @@ class Configuration:
     final_model_path: str = os.path.join(MODELS_PATH, f"tetris_turbomino_{exp_name}.zip")
 
     model_path: str = None
+    resume_model_path: str = None
     # ===================================================================
     #                       PARAMETER PRETRAIN
     # ===================================================================
@@ -67,7 +69,6 @@ class Configuration:
 
     gym_id:          str = None
     
-    total_timesteps: int = 25_000
     max_placements: int = 156
     d_model: int = 156
     n_heads: int = 4
@@ -82,7 +83,7 @@ class Configuration:
     features_per_placement: int = 4
     learning_rate: float = 3e-4
     lr_end: float = 1e-5
-    n_steps: int = 2048
+    rollout_samples: int = 2_048
     ent_coef: float = 0.02
     ent_coef_end: float = 0.001
     clip_range: float = 0.2
@@ -91,16 +92,19 @@ class Configuration:
     n_envs: int = 1
     target_kl: float = 0.02
 
-    save_freq: int = 50_000
+    eval_interval_samples: int = 50_000
     eval_episodes: int = 100
+    eval_seed: int = 10_000
     max_eval_pieces: int = 200
     curriculum_learned_ratio: float = 0.9
-    curriculum_min_eval_reward: float = 0.0
+    curriculum_min_eval_score: float = 1_000.0
 
     total_timesteps: int = 5_000_000
 
     clear_lines_on_placement: bool = True
     use_heuristic_rewards: bool = True
+    alive_bonus: int = 10
+    death_penalty: int = -250
 
     garbage_prob: float = 0.0774
     garbage_delay: int = 5
@@ -118,10 +122,19 @@ class Configuration:
 
     curriculum: dict = field(default_factory=dict)  # {board_w: timesteps}, e.g. {4: 1_000_000, 6: 1_000_000, 8: 1_000_000, 10: 2_000_000}
 
+    def rollout_steps(self) -> int:
+        return max(1, math.ceil(self.rollout_samples / self.n_envs))
+
+    def eval_steps(self) -> int:
+        return max(1, math.ceil(self.eval_interval_samples / self.n_envs))
+
 
     def __post_init__(self):
         if self.config:
             self.load_yaml(self.config)
+
+        if self.eval_episodes < 1:
+            raise ValueError("eval_episodes must be at least 1")
 
         # Recompute paths (exp_name may have changed from YAML or CLI)
         self.log_dir = os.path.join(self.LOGS_PATH, f"tensorboard_{self.exp_name}")

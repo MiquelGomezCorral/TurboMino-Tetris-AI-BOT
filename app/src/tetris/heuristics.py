@@ -16,9 +16,9 @@ class HeuristicsResult(NamedTuple):
 
 
     base_weights = {
-        'blocks': -0.01,
+        'blocks': -0.05,
         'weighted_blocks': -0.1,
-        'clearable_lines': 10.0,
+        'clearable_lines': 5.0,
         'roughness': -0.25,
         'col_holes': -1.0,
         'connected_holes': -1.0,
@@ -26,22 +26,9 @@ class HeuristicsResult(NamedTuple):
         'pit_hole_percent': -0.5,
         'deepest_well': 0.5,
 
-        'total': 1.0,  # Optional: weight for the total score itself if you want to include it
+        'total': 2.0,  # Optional: weight for the total score itself if you want to include it
     }
 
-    def __str__(self):
-        return (f"HeuristicsResult(\n"
-                f"  blocks={self.blocks}, \n"
-                f"  weighted_blocks={self.weighted_blocks}, \n"
-                f"  clearable_lines={self.clearable_lines}, \n" 
-                f"  roughness={self.roughness}, \n"
-                f"  col_holes={self.col_holes}, \n"
-                f"  connected_holes={self.connected_holes}, \n"
-                f"  blocks_above_holes={self.blocks_above_holes}, \n"
-                f"  pit_hole_percent={self.pit_hole_percent:.2f}, \n" 
-                f"  deepest_well={self.deepest_well}\n"
-                ")")
-    
     def compute_total(self, weights: dict=None) -> float:
         """Compute a weighted sum of heuristics based on provided weights."""
         total = 0.0
@@ -70,8 +57,6 @@ class HeuristicEvaluator:
         powers = np.arange(24, dtype=np.float32)
         self._block_weights = np.minimum(0.01 * (2 ** powers), 10.24)
 
-    def reset(self) -> None:
-        ...
     # ------------------------------------------------------------------
     # Core low-level helpers
     # ------------------------------------------------------------------
