@@ -1,3 +1,4 @@
+# Heuristic and survival rewards seem to work!
 exp_name: "config_curr_ppo"
 seed: 42
 
@@ -6,7 +7,7 @@ features_per_placement: 1
 learning_rate: 0.0002
 lr_end: 0.00001
 clip_range: 0.1
-rollout_samples: 12288
+rollout_samples: 73728
 batch_size: 96
 ent_coef: 0.005
 ent_coef_end: 0.001
@@ -18,7 +19,7 @@ verbose: 0
 wide_k: 1
 channels: 32
 
-eval_interval_samples: 25000
+eval_interval_samples: 73728
 eval_episodes: 100
 max_eval_pieces: 500
 curriculum_learned_ratio: 0.9
@@ -37,7 +38,7 @@ curriculum:
 garbage_prob: 0.0
 
 use_survival_rewards: True
-use_heuristic_rewards: False
+use_heuristic_rewards: True
 use_game_rewards: False
 alive_reward: 0.1
 death_penalty: -5.0
