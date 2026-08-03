@@ -6,34 +6,43 @@ features_per_placement: 1
 learning_rate: 0.0002
 lr_end: 0.00001
 clip_range: 0.1
-rollout_samples: 12500
+rollout_samples: 12288
 batch_size: 96
 ent_coef: 0.005
 ent_coef_end: 0.001
-gamma: 0.999
+gamma: 0.9995
+gae_lambda: 0.98
 n_envs: 12
 verbose: 0
 
 wide_k: 1
 channels: 32
 
-eval_interval_samples: 250000
+eval_interval_samples: 25000
 eval_episodes: 100
-max_eval_pieces: 1000
+max_eval_pieces: 500
 curriculum_learned_ratio: 0.9
 
 total_timesteps: 5000000
 
 clear_lines_on_placement: true
-use_heuristic_rewards: true
 target_kl: 0.015
 
-# Uncomment to enable curriculum (board width progression):
 curriculum:
   4: 10000000
   6: 10000000
   8: 10000000
   10: 25000000
 
-death_penalty: -1000
 garbage_prob: 0.0
+
+use_survival_rewards: True
+use_heuristic_rewards: False
+use_game_rewards: False
+alive_reward: 0.1
+death_penalty: -5.0
+heuristic_reward_scale: 0.01
+heuristic_reward_cap: 0.1
+line_clear_reward: 0.1
+all_clear_reward: 0.4
+t_spin_reward: 0.2

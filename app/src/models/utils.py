@@ -38,6 +38,7 @@ def load_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, env=None, l
                 "ent_coef": CONFIG.ent_coef,
                 "clip_range": CONFIG.clip_range,
                 "gamma": CONFIG.gamma,
+                'gae_lambda': CONFIG.gae_lambda,
                 "target_kl": CONFIG.target_kl,
             },
         )
@@ -61,6 +62,7 @@ def create_fresh_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, env
         ent_coef=CONFIG.ent_coef,
         clip_range=CONFIG.clip_range,
         gamma=CONFIG.gamma,
+        gae_lambda=CONFIG.gae_lambda,
         tensorboard_log=CONFIG.log_dir,
         verbose=0,
         target_kl=CONFIG.target_kl,

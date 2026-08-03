@@ -5,7 +5,7 @@ import enum
 
 from src.config import Configuration
 
-from .scoring import SpinType, ScoringSystem
+from .scoring import PlacementEvent, SpinType, ScoringSystem
 
 
 # ===================================================================
@@ -664,6 +664,9 @@ class Tetris:
 
     def get_score(self):
         return self.score_system.score
+
+    def get_last_placement_event(self) -> PlacementEvent:
+        return self.score_system.last_placement_event
 
     def get_queue(self):
         return [p.value for p in self.queue.get_queue()]

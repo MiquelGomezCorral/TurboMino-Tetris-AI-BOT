@@ -1,10 +1,18 @@
 import math
 from enum import Enum
+from typing import NamedTuple
 
 class SpinType(Enum):
     NONE = 0
     MINI = 1
     REGULAR = 2
+
+
+class PlacementEvent(NamedTuple):
+    lines_cleared: int
+    all_clear: bool
+    regular_t_spin: bool
+
 
 class ScoringSystem:
     def __init__(self):
@@ -14,6 +22,7 @@ class ScoringSystem:
         self.combo = 0
         self.b2b_streak = 0
         self.last_move_name = ""
+        self.last_placement_event = PlacementEvent(0, False, False)
         self.total_all_clears = 0
         self.total_tetrises = 0
 
@@ -43,6 +52,11 @@ class ScoringSystem:
             SpinType.MINI: {0: 0, 1: 0, 2: 1},
             SpinType.NONE: {0: 0, 1: 0, 2: 1, 3: 2, 4: 4}
         }
+        self.last_placement_event = PlacementEvent(
+            lines_cleared=lines,
+            all_clear=perfect_clear,
+            regular_t_spin=spin == SpinType.REGULAR,
+        )
         self.score += drop_distance * (2 if hard_drop else 1)
         self.last_move_name = self._compute_move_name(lines, spin, perfect_clear)
 

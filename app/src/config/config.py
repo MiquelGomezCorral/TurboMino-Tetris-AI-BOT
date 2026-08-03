@@ -88,6 +88,7 @@ class Configuration:
     ent_coef_end: float = 0.001
     clip_range: float = 0.2
     gamma: float = 0.999
+    gae_lambda: float = 0.98
     verbose: int = 0
     n_envs: int = 1
     target_kl: float = 0.02
@@ -101,10 +102,17 @@ class Configuration:
 
     total_timesteps: int = 5_000_000
 
-    clear_lines_on_placement: bool = True
-    use_heuristic_rewards: bool = True
-    alive_bonus: int = 10
-    death_penalty: int = -250
+    clear_lines_on_placement: bool = True # On the previsualization we send to the model!
+    use_survival_rewards: bool = True
+    use_heuristic_rewards: bool = False
+    use_game_rewards: bool = False
+    alive_reward: float = 0.1
+    death_penalty: float = -5.0
+    heuristic_reward_scale: float = 0.01
+    heuristic_reward_cap: float = 0.1
+    line_clear_reward: float = 0.1
+    all_clear_reward: float = 0.4
+    t_spin_reward: float = 0.2
 
     garbage_prob: float = 0.0774
     garbage_delay: int = 5

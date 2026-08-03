@@ -62,7 +62,6 @@ class TetrisEnv(gym.Env):
         # =========== 1. Execute the sequence chosen by the neural network =========== 
         chosen_placement, _ = self.all_placements[action]
 
-        reward = self.game.get_score()
         heuristic_before = (
             self.evaluator.evaluate(self.game.board).compute_total()
             if self.CONFIG.use_heuristic_rewards else 0.0
@@ -76,16 +75,30 @@ class TetrisEnv(gym.Env):
 
 
         # ===========  3. Calculate Reward =========== 
+        reward = 0.0
         if terminated:
-            # Penalize death — large negative reward so the model learns to survive
-            reward = self.CONFIG.death_penalty
-        else: 
-            reward = self.game.get_score() - reward + self.CONFIG.alive_bonus # Reward is the score difference after the move
-            if self.CONFIG.use_heuristic_rewards:
-                # Reward board improvement, not its cumulative penalty.
-                reward += self.evaluator.evaluate(self.game.board).compute_total() - heuristic_before
+            # Terminal transitions use only the configured death reward.
+            if self.CONFIG.use_survival_rewards:
+                reward = self.CONFIG.death_penalty
+        else:
+            if self.CONFIG.use_survival_rewards:
+                reward += self.CONFIG.alive_reward
 
-        reward = np.sign(reward) * np.sqrt(np.abs(reward)) / 10.0
+            if self.CONFIG.use_game_rewards:
+                event = self.game.get_last_placement_event()
+                reward += event.lines_cleared * self.CONFIG.line_clear_reward
+                if event.all_clear:
+                    reward += self.CONFIG.all_clear_reward
+                if event.regular_t_spin:
+                    reward += self.CONFIG.t_spin_reward
+
+            if self.CONFIG.use_heuristic_rewards:
+                heuristic_delta = self.evaluator.evaluate(self.game.board).compute_total() - heuristic_before
+                reward += float(np.clip(
+                    heuristic_delta * self.CONFIG.heuristic_reward_scale,
+                    -self.CONFIG.heuristic_reward_cap,
+                    self.CONFIG.heuristic_reward_cap,
+                ))
 
         
         # ===========  4. Get next states =========== 
