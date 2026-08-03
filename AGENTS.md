@@ -26,7 +26,12 @@ bash scripts/stop_training.sh config_curr_ppo.yaml    # kill that background pro
 
 Logs and PID files go into `logs/<config_name>.log` / `logs/<config_name>.pid`.
 
-No tests, no linter/formatter, no pre-commit, no CI.
+Tests use the standard library `unittest`; there is no linter/formatter,
+pre-commit, or CI configuration.
+
+```bash
+python -m unittest discover -s app/tests -v
+```
 
 ## Architecture
 
@@ -50,3 +55,4 @@ Two config classes, don't mix them:
 - `app/app.egg-info/` is stale — safe to ignore or regenerate.
 - Playfield test strings: `char_map` maps piece enum names (I, O, T, S, Z, J, L, G). Use `'G'` for garbage/filled cells, not `'X'`.
 - `MoveSearcher.get_all_placements()` does BFS over all rotation + translation placements. Used by both the RL env and any external placement queries.
+- PPO reward defaults are survival-only: `alive_reward=0.1`, `death_penalty=-5.0`, with game and heuristic rewards disabled. See `docs/scoring-and-garbage.md`.

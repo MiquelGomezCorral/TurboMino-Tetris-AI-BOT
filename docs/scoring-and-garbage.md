@@ -357,21 +357,33 @@ immediate_garbage = min(garbage_cap, ready_or_near_ready_lines)
 
 Engine score and attack are separate from the Gymnasium reward.
 
-For a non-terminal step, the raw reward is:
+By default, the environment uses survival-only rewards. For a non-terminal step,
+the reward is:
 
 ```text
-score_delta + alive_bonus
+alive_reward
 ```
 
-The default `alive_bonus` is `10`. When heuristic rewards are enabled, the board heuristic value is also added.
+The default `alive_reward` is `0.1`. When enabled, game-event rewards are added
+for cleared lines, all clears, and regular T-spins. Heuristic rewards can also be
+enabled as a scaled and capped change in the board heuristic.
 
-For a terminal step, the raw reward is replaced by `death_penalty`, whose default is `-250`.
+For a terminal step, the reward is only `death_penalty`, whose default is `-5.0`.
+Game-event and heuristic rewards are not added to terminal transitions.
 
-Finally, the environment compresses reward magnitude:
+The default reward configuration is:
 
-```text
-reward = sign(raw_reward) * sqrt(abs(raw_reward)) / 10
+```yaml
+use_survival_rewards: true
+use_game_rewards: false
+use_heuristic_rewards: false
+alive_reward: 0.1
+death_penalty: -5.0
 ```
+
+Optional reward values are configured with `line_clear_reward`,
+`all_clear_reward`, `t_spin_reward`, `heuristic_reward_scale`, and
+`heuristic_reward_cap`.
 
 ## Tested Behavior
 
@@ -386,8 +398,46 @@ reward = sign(raw_reward) * sqrt(abs(raw_reward)) / 10
 - Garbage generation only after a locked piece.
 - Model game-state overrides.
 
+`app/tests/test_rewards.py` covers:
+
+- Placement-event recording without changing player-facing score behavior.
+- Game rewards reading placement events instead of cumulative engine score.
+- Terminal rewards excluding game-event and heuristic rewards.
+- Heuristic reward scaling and capping.
+
 The tests can be run with:
 
 ```bash
 conda run -n TETRIO_env python -m unittest discover -s app/tests -v
 ```
+
+## PPO Training Findings
+
+The previous curriculum run in `logs/config_curr_ppo.yaml.log` showed that the
+training pipeline was active and learning short-horizon behavior, but it did not
+meet the long-horizon survival objective:
+
+- Mean pieces improved from about `29` early in training to about `39` at its
+  best observed plateau.
+- The final recorded validation was about `35.7` mean pieces at roughly
+  `10M` steps.
+- The `survival` metric remained `0%` because it counts episodes reaching the
+  configured `max_eval_pieces` threshold, not partial survival progress.
+- Score-pass percentages saturated and were therefore not a reliable proxy for
+  survival quality.
+
+These results support a reward-objective mismatch as the primary hypothesis,
+not a conclusion that PPO or the environment failed completely. The next
+curriculum run should be evaluated against survival milestones and mean pieces,
+not score alone. The current curriculum config uses `max_eval_pieces: 500` as
+its strict long-horizon gate.
+
+The survival strategy is intentionally staged: establish a survival-only
+baseline first, then test one secondary signal at a time. Hard-drop distance,
+combo score, B2B score, and other player-facing score details are not default
+survival objectives because they can reward point accumulation without proving
+that the board remains playable.
+
+The survival-only reward redesign has been implemented, but its training result
+must be measured in a fresh run. No claim of improved PPO performance should be
+made until that comparison is complete.

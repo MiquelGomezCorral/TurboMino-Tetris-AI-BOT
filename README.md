@@ -37,6 +37,14 @@ Stop training:
 bash scripts/stop_training.sh config_curr_ppo.yaml
 ```
 
+The current curriculum configuration uses survival-only PPO rewards by default:
+`+0.1` for each non-terminal placement and `-5.0` for terminal transitions.
+Engine score is reported for evaluation but is not used as the default training
+reward. Game-event and heuristic rewards are available as opt-in settings.
+
+See [`docs/scoring-and-garbage.md`](docs/scoring-and-garbage.md) for the exact
+reward semantics and the training findings that motivated this choice.
+
 ### Architecture
 - **Tetris engine** (`src/tetris/`): Core game logic, bit-packed uint32 board rows, MoveSearcher (BFS over all piece rotations/translations)
 - **Gymnasium env** (`src/models/`): `TetrisEnv` with configurable board size, padded to max dimensions
@@ -82,6 +90,15 @@ Detener entrenamiento:
 ```bash
 bash scripts/stop_training.sh config_curr_ppo.yaml
 ```
+
+La configuracion actual del curriculum usa por defecto recompensas de
+supervivencia: `+0.1` por cada colocacion no terminal y `-5.0` en transiciones
+terminales. La puntuacion del motor se muestra durante la evaluacion, pero no
+se usa como recompensa de entrenamiento por defecto. Las recompensas por
+eventos del juego y heuristicas son opcionales.
+
+Consulta [`docs/scoring-and-garbage.md`](docs/scoring-and-garbage.md) para el
+comportamiento exacto y las conclusiones que motivaron esta decision.
 
 ### Arquitectura
 - **Motor Tetris** (`src/tetris/`): Lógica del juego, filas uint32 bit-packed, MoveSearcher (BFS sobre rotaciones/traslaciones)
