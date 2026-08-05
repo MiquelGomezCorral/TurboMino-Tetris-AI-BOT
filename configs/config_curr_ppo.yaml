@@ -9,6 +9,7 @@ lr_end: 0.00001
 clip_range: 0.1
 rollout_samples: 73728
 batch_size: 96
+n_epochs: 10
 ent_coef: 0.005
 ent_coef_end: 0.001
 gamma: 0.9995
@@ -19,9 +20,10 @@ verbose: 0
 wide_k: 4
 channels: 32
 
-eval_interval_samples: 73728
+eval_every_rollouts: 4
 eval_episodes: 100
 max_eval_pieces: 500
+run_final_eval: false
 curriculum_learned_ratio: 0.9
 
 total_timesteps: 5000000
@@ -33,7 +35,14 @@ curriculum:
   4: 10000000
   6: 10000000
   8: 10000000
-  10: 25000000
+  10: 2500000
+  -1: 5000000
+
+random_width:
+  4: 0.05
+  6: 0.05
+  8: 0.05
+  10: 0.85
 
 garbage_prob: 0.0
 

@@ -49,6 +49,7 @@ class Configuration:
     test_size: float = 0.10
     val_size:  float = 0.05
     batch_size: int = 256
+    n_epochs: int = 10
     num_workers: int = 4
 
     epochs: int = 100
@@ -93,10 +94,11 @@ class Configuration:
     n_envs: int = 1
     target_kl: float = 0.02
 
-    eval_interval_samples: int = 50_000
+    eval_every_rollouts: int = 1
     eval_episodes: int = 100
     eval_seed: int = 10_000
     max_eval_pieces: int = 200
+    run_final_eval: bool = False
     curriculum_learned_ratio: float = 0.9
     curriculum_min_eval_score: float = 1_000.0
 
@@ -129,12 +131,13 @@ class Configuration:
     ])
     
     curriculum: dict = field(default_factory=dict)  # {board_w: timesteps}, e.g. {4: 1_000_000, 6: 1_000_000, 8: 1_000_000, 10: 2_000_000}
+    random_width: dict = None
 
     def rollout_steps(self) -> int:
         return max(1, math.ceil(self.rollout_samples / self.n_envs))
 
     def eval_steps(self) -> int:
-        return max(1, math.ceil(self.eval_interval_samples / self.n_envs))
+        return self.rollout_steps() * self.eval_every_rollouts
 
 
     def __post_init__(self):
@@ -143,6 +146,15 @@ class Configuration:
 
         if self.eval_episodes < 1:
             raise ValueError("eval_episodes must be at least 1")
+        if self.n_epochs < 1:
+            raise ValueError("n_epochs must be at least 1")
+        if self.eval_every_rollouts < 1:
+            raise ValueError("eval_every_rollouts must be at least 1")
+        if self.random_width:
+            if any(not isinstance(width, int) or width < 1 or width > self.max_board_size_w for width in self.random_width):
+                raise ValueError("random_width values must fit within max_board_size_w")
+            if any(probability < 0 for probability in self.random_width.values()) or not math.isclose(sum(self.random_width.values()), 1.0):
+                raise ValueError("random_width probabilities must sum to 1")
 
         # Recompute paths (exp_name may have changed from YAML or CLI)
         self.log_dir = os.path.join(self.LOGS_PATH, f"tensorboard_{self.exp_name}")
