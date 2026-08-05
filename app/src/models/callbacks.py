@@ -1,3 +1,4 @@
+import os
 from tqdm import tqdm
 from stable_baselines3.common.callbacks import BaseCallback
 import numpy as np
@@ -81,7 +82,9 @@ class TetrisValidationCallback(BaseCallback):
         self, eval_env, eval_freq: int = 10000, n_eval_episodes: int = 5,
         max_pieces: int = 100, learned_ratio: float | None = None,
         min_score: float = 0.0, eval_seed: int | None = None,
-        best_model_path: str | None = None, verbose: int = 1,
+        best_model_path: str | None = None,
+        model_path_template: str | None = None,
+        verbose: int = 1,
     ):
         super().__init__(verbose)
         self.eval_env = eval_env
@@ -92,6 +95,7 @@ class TetrisValidationCallback(BaseCallback):
         self.min_score = min_score
         self.eval_seed = eval_seed
         self.best_model_path = best_model_path
+        self.model_path_template = model_path_template
         self.saved_best_model_path = None
         self.best_key = None
         self.learned = False
@@ -102,12 +106,20 @@ class TetrisValidationCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         if self.n_calls % self.eval_freq == 0: # and self.n_calls > 0:
+            model_path = None
+            if self.model_path_template:
+                model_path = self.model_path_template.format(
+                    num_timesteps=self.num_timesteps
+                )
+                if self.n_calls == 0 or not os.path.exists(model_path):
+                    self.model.save(model_path)
             rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
-                n_eval_episodes=self.n_eval_episodes,
+                CONFIG=self.eval_env.CONFIG,
+                T_CONFIG=self.eval_env.T_CONFIG,
+                eval_episodes=self.n_eval_episodes,
                 max_pieces=self.max_pieces,
-                eval_env=self.eval_env,
-                model=self.model,
-                seed=self.eval_seed,
+                model_path=model_path,
+                eval_seed=self.eval_seed,
             )
 
             mean_score = np.mean(scores)

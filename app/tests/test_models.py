@@ -1,12 +1,16 @@
 import copy
+import os
+import tempfile
 import unittest
 
+import numpy as np
 import torch
 from torch import nn
 
 from src.config import Configuration
 from src.models.TurboMino import BoardEncoder, TurboMinoEncoder, TurboMinoModule
 from src.models.gym_env import TetrisEnv
+from src.models.train_ppo import _load_resume_state, _save_resume_state, _stage_index_from_checkpoint
 from src.tetris import TetrisConfiguration
 
 
@@ -78,6 +82,32 @@ class BoardEncoderTests(unittest.TestCase):
         module = TurboMinoModule(config, tetris_config, observation_space).eval()
         logits = module(observations)
         self.assertTrue(torch.all(logits[:, 1:3] == TurboMinoEncoder.MASK_VALUE))
+
+
+class ResumeStateTests(unittest.TestCase):
+    def test_resume_state_preserves_curriculum_progress_and_config(self):
+        config = Configuration(curriculum={4: 1000, 8: 2000})
+        tetris_config = TetrisConfiguration(board_w=8)
+
+        with tempfile.TemporaryDirectory() as directory:
+            model_path = os.path.join(directory, "model.zip")
+            _save_resume_state(
+                model_path,
+                config,
+                tetris_config,
+                stage_index=1,
+                stage_start_global_steps=1000,
+                stage_target_steps=2000,
+                stage_completed_steps=500,
+                stage_complete=np.bool_(False),
+            )
+
+            state = _load_resume_state(model_path)
+
+        self.assertEqual(state["config"]["curriculum"], {4: 1000, 8: 2000})
+        self.assertEqual(state["curriculum"]["stage_completed_steps"], 500)
+        self.assertEqual(state["curriculum"]["global_steps"], 1500)
+        self.assertEqual(_stage_index_from_checkpoint("models/w8/model.zip", [(4, 1000), (8, 2000)]), 1)
 
 
 if __name__ == "__main__":
