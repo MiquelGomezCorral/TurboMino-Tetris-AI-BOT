@@ -104,13 +104,22 @@ class BoardEncoder(nn.Module):
         flat_dim = k * ch * (height // 4) * (width // 4)
         self.proj = nn.Linear(flat_dim, d_model)
 
-    def forward(self, boards):  # (B, M, H, W) -> (B, M, d_model)
+    def forward(self, boards, valid_mask=None):  # (B, M, H, W) -> (B, M, d_model)
         b, m = boards.shape[:2]
         x = rearrange(boards, "b m h w -> (b m) 1 h w")
+        if valid_mask is not None:
+            valid_mask = valid_mask.bool().reshape(-1)
+            if not valid_mask.any():
+                return boards.new_zeros((b, m, self.proj.out_features))
+            x = x[valid_mask]
         x = self.pool(self.conv_1(self.res_1(self.stem(x))))
         x = self.pool(self.conv_2(self.res_2(x)))
         x = rearrange(x, "bm c h w -> bm (c h w)")
         x = self.proj(x)
+        if valid_mask is not None:
+            tokens = x.new_zeros((b * m, x.shape[-1]))
+            tokens[valid_mask] = x
+            x = tokens
         return rearrange(x, "(b m) d -> b m d", b=b, m=m)
 
 
@@ -255,13 +264,13 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         queues = observations["queues"]              # (B, 2, S, C)
         queue_idx = observations["queue_idx"].long() # (B, M)
         mask = observations.get("placement_mask")    # (B, M) or None
-        key_mask = mask.bool() if mask is not None else None
+        gs = observations["game_state"]               # (B, 4)
 
         B, M = boards.shape[:2]
         _, num_queues, S, C = queues.shape
 
         # 1. Encode the Board
-        board_tok = self.board_encoder(boards)       # (B, M, d)
+        board_tok = self.board_encoder(boards, mask) # (B, M, d)
 
         # 2. Encode the Unique Queues Efficiently (Runs only 2 times per batch item, not M times)
         flat_queues = rearrange(queues, "b k s c -> (b k) s c")
@@ -276,7 +285,6 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         piece_tok_per_placement = piece_toks[batch_indices, queue_idx] 
 
         # Game observation as a token so it adds to the board more info
-        gs = observations["game_state"]                          # (B, 4)
         gs_tok = self.game_state_proj(gs)                        # (B, d)
         gs_tok = gs_tok.unsqueeze(1)                             # (B, 1, d)
         gs_tok_expanded = gs_tok.unsqueeze(1).expand(-1, M, -1, -1)  # (B, M, 1, d)
@@ -303,6 +311,8 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         fused = torch.cat([board_tok, b_from_p], dim=-1)              # (B, M, 2d)
         fused = fused * self.feature_scale
         values = self.placement_head(fused)                           # (B, M, f)
+        if mask is not None:
+            values = values * mask.bool().unsqueeze(-1)
         final_features = rearrange(values, "b m f -> b (m f)")        # (B, M * f)
         return final_features
     
@@ -352,17 +362,18 @@ class TurboMinoModule(pl.LightningModule):
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
         """Returns placement logits (B, M)."""
         features = self.encoder(observations)                        # (B, M * f)
-        B = features.shape[0]
-        M = self.CONFIG.max_placements
-        f = self.CONFIG.features_per_placement
 
-        per_placement = features.view(B, M, f)                       # (B, M, f)
+        per_placement = features.view(
+            features.shape[0],
+            self.CONFIG.max_placements, 
+            self.CONFIG.features_per_placement
+        ) # (B, M, f)
         logits = self.classifier_head(per_placement).squeeze(-1)     # (B, M)
 
-        # Mask invalid placements before loss / argmax
+        # Mask invalid placements before loss / argmax.
         mask = observations.get("placement_mask")
         if mask is not None:
-            logits = logits.masked_fill(mask.bool(), TurboMinoEncoder.MASK_VALUE)
+            logits = logits.masked_fill(~mask.bool(), TurboMinoEncoder.MASK_VALUE)
 
         return logits                                                 # (B, M)
 

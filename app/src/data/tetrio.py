@@ -86,7 +86,7 @@ class TetrioDataset(Dataset):
             float(row['immediate_garbage']),
             float(row['incoming_garbage']),
         ]
-        _, features = searcher.get_all_features(game_state)
+        placements, features = searcher.get_all_features(game_state)
 
         board = Board(game.width, game_h, game.vanish_zone, game.color_map,
                       row['playfield_next'][int(row['immediate_garbage'])*10:])
@@ -95,7 +95,7 @@ class TetrioDataset(Dataset):
         assert target != -1, f"Board not found in placements for row {row_idx}, {target=}. Run validation to generate valid_indices."
 
         # Pad all variable-length tensors to max_placements
-        M_actual = features['boards'].shape[0]
+        M_actual = len(placements)
         M_max    = self.CONFIG.max_placements
 
         def pad_first_dim(arr, max_len, pad_value=0.0):
@@ -106,16 +106,15 @@ class TetrioDataset(Dataset):
         queues    = features['queues']                                 # (2, S, C) — not placement-dim
         queue_idx = pad_first_dim(features['queue_idx'], M_max)       # (M,)
 
-        # Mask: True = invalid (padded) slot
-        placement_mask = np.zeros(M_max, dtype=np.float32)
-        placement_mask[M_actual:] = 1.0
+        placement_mask = np.zeros(M_max, dtype=bool)
+        placement_mask[:M_actual] = True
 
         obs = {
             "boards":          torch.from_numpy(boards).float(),
             "queues":          torch.from_numpy(queues).float(),
             "queue_idx":       torch.from_numpy(queue_idx).long(),
             "game_state":      torch.from_numpy(features['game_state']).float(),
-            "placement_mask":  torch.from_numpy(placement_mask).float(),
+            "placement_mask":  torch.from_numpy(placement_mask),
         }
 
         return obs, torch.tensor(target, dtype=torch.long)
@@ -189,15 +188,15 @@ class PrecomputedTetrioDataset(Dataset):
         boards    = pad_first_dim(boards, M_max)
         queue_idx = pad_first_dim(queue_idx, M_max)
 
-        placement_mask = np.zeros(M_max, dtype=np.float32)
-        placement_mask[M_actual:] = 1.0
+        placement_mask = np.zeros(M_max, dtype=bool)
+        placement_mask[:M_actual] = True
 
         obs = {
             "boards":          torch.from_numpy(boards).float(),
             "queues":          torch.from_numpy(queues).float(),
             "queue_idx":       torch.from_numpy(queue_idx).long(),
             "game_state":      torch.from_numpy(game_state).float(),
-            "placement_mask":  torch.from_numpy(placement_mask).float(),
+            "placement_mask":  torch.from_numpy(placement_mask),
         }
 
         return obs, torch.tensor(target, dtype=torch.long)

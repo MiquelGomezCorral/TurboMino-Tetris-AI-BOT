@@ -163,7 +163,7 @@ class TetrioDataTests(unittest.TestCase):
             )
             dataset = PrecomputedTetrioDataset(
                 data_dir,
-                SimpleNamespace(max_placements=2, aug_prob=1),
+                SimpleNamespace(max_placements=3, aug_prob=1),
             )
 
             obs, target = dataset[0]
@@ -171,9 +171,11 @@ class TetrioDataTests(unittest.TestCase):
         np.testing.assert_array_equal(obs["boards"].numpy(), [
             [[0, 0, 1, 0]],
             [[0, 0, 1, 1]],
+            [[0, 0, 0, 0]],
         ])
         self.assertEqual(obs["queues"][0, 0, PieceEnum.Z.value], 1)
         self.assertEqual(obs["queues"][1, 0, PieceEnum.L.value], 1)
+        np.testing.assert_array_equal(obs["placement_mask"].numpy(), [True, True, False])
         self.assertEqual(target.item(), 1)
 if __name__ == "__main__":
     unittest.main()
