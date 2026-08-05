@@ -16,7 +16,7 @@ gae_lambda: 0.98
 n_envs: 12
 verbose: 0
 
-wide_k: 1
+wide_k: 4
 channels: 32
 
 eval_interval_samples: 73728
@@ -42,8 +42,12 @@ use_heuristic_rewards: True
 use_game_rewards: False
 alive_reward: 0.1
 death_penalty: -5.0
+
 heuristic_reward_scale: 0.01
 heuristic_reward_cap: 0.1
 line_clear_reward: 0.1
-all_clear_reward: 0.4
 t_spin_reward: 0.2
+all_clear_reward: 0.8
+
+# CAMBIAR QUITAR UNA RESIDUAL
+# CAMBIAR METER EL PIECES TO BOARD ATTENTION
