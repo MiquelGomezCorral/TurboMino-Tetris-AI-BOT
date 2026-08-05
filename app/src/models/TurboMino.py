@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from math import gcd
 from einops import rearrange, reduce, repeat
 from torch import nn
 import pytorch_lightning as pl
@@ -65,17 +66,20 @@ class TransformerBlock(nn.Module):
 # ----------------------------------------------------------------------------- #
 #  Board encoder (CNN with residual skip — shared across every placement)       #
 # ----------------------------------------------------------------------------- #
+def _group_norm(ch: int) -> nn.GroupNorm:
+    return nn.GroupNorm(gcd(ch, 8), ch)
+
+
 class WideResBlock(nn.Module):
     """The 'Skip' connection from the diagram: conv -> conv with a residual add."""
 
     def __init__(self, ch: int, k: int = 4):
         super().__init__()
         self.net = nn.Sequential(
-            nn.BatchNorm2d(ch),
+            _group_norm(ch),
             nn.Conv2d(ch, ch*k, 3, padding='same'),
             nn.GELU(),
-            nn.Dropout(0.5),
-            nn.BatchNorm2d(ch*k),
+            _group_norm(ch*k),
             nn.Conv2d(ch*k, ch*k, 3, padding='same'),
             nn.GELU(),
         )
@@ -248,7 +252,6 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
         self.game_state_proj = nn.Linear(4, d_model)
         
         # Per-placement value head ('Oculto' MLP), shared across the M placements.
-        self.feature_scale = nn.Parameter(torch.tensor(10.0))
         self.placement_head = nn.Sequential(
             nn.Linear(2 * d_model, head_hidden),
             nn.GELU(),
@@ -257,6 +260,18 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
             nn.GELU(),
             nn.Linear(head_hidden, CONFIG.features_per_placement),
         )
+
+    def print_parameters(self):
+        parameter_counts = {
+            "BoardEncoder": sum(parameter.numel() for parameter in self.board_encoder.parameters()),
+            "PieceEncoder": sum(parameter.numel() for parameter in self.piece_encoder.parameters()),
+            "BoardToPiece": sum(parameter.numel() for parameter in self.board_to_piece.parameters()),
+            "GameStateProj": sum(parameter.numel() for parameter in self.game_state_proj.parameters()),
+            "PlacementHead": sum(parameter.numel() for parameter in self.placement_head.parameters()),
+        }
+        for name, count in parameter_counts.items():
+            print(f"- {name} params: {count:,}")
+        print(f"Total params: {sum(parameter_counts.values()):,}")
 
 
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
@@ -309,7 +324,6 @@ class TurboMinoEncoder(BaseFeaturesExtractor):
 
         # 6. Fuse and Score
         fused = torch.cat([board_tok, b_from_p], dim=-1)              # (B, M, 2d)
-        fused = fused * self.feature_scale
         values = self.placement_head(fused)                           # (B, M, f)
         if mask is not None:
             values = values * mask.bool().unsqueeze(-1)
@@ -345,6 +359,7 @@ class TurboMinoModule(pl.LightningModule):
         self.T_CONFIG = T_CONFIG
 
         self.encoder = TurboMinoEncoder(observation_space, T_CONFIG, CONFIG)
+        self.encoder.print_parameters()
 
         # Project (M * f) back to M logits for placement classification
         self.classifier_head = nn.Linear(
