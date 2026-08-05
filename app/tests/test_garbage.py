@@ -119,6 +119,26 @@ class GarbageTests(unittest.TestCase):
 
         np.testing.assert_array_equal(features["game_state"], np.array([2, 3, 4, 5], dtype=np.float32))
 
+    def test_move_searcher_requires_a_game(self):
+        with self.assertRaises(ValueError):
+            MoveSearcher().get_all_placements()
+
+    def test_active_queue_uses_empty_hold_slot(self):
+        config = Configuration(max_board_size_h=8, max_board_size_w=4)
+        tetris_config = TetrisConfiguration(board_w=4, board_h=8, vanish_zone=0)
+        game = Tetris(
+            width=4,
+            height=8,
+            vanish_zone=0,
+            next_pieces="OTSZJL",
+            active_piece="I",
+            garbage_prob=0,
+        )
+
+        _, features = MoveSearcher(game, config, tetris_config).get_all_features()
+
+        self.assertEqual(np.argmax(features["queues"][0, 1]), PieceEnum.N.value)
+
 
 class TetrioDataTests(unittest.TestCase):
     def test_flip_rows_mirrors_fields_and_piece_types(self):

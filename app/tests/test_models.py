@@ -14,13 +14,58 @@ from src.models.train_ppo import _load_resume_state, _save_resume_state, _stage_
 from src.tetris import TetrisConfiguration
 
 
+class ConfigurationTests(unittest.TestCase):
+    def test_eval_frequency_is_derived_from_rollout_count(self):
+        config = Configuration(
+            rollout_samples=10_000,
+            n_envs=12,
+            eval_every_rollouts=4,
+        )
+
+        self.assertEqual(config.n_epochs, 10)
+        self.assertEqual(config.rollout_steps(), 834)
+        self.assertEqual(config.eval_steps(), 3_336)
+
+    def test_random_width_rejects_out_of_bounds_values(self):
+        with self.assertRaises(ValueError):
+            Configuration(max_board_size_w=10, random_width={11: 1.0})
+        with self.assertRaises(ValueError):
+            Configuration(random_width={4.5: 1.0})
+
+
+class TetrisEnvTests(unittest.TestCase):
+    def test_board_observations_use_uint8_storage(self):
+        env = TetrisEnv(Configuration(), TetrisConfiguration())
+
+        self.assertEqual(env.observation_space["boards"].dtype, np.dtype(np.uint8))
+
+    def test_reset_uses_configured_vanish_zone(self):
+        config = Configuration(max_board_size_h=8, max_board_size_w=4)
+        tetris_config = TetrisConfiguration(board_w=4, board_h=8, vanish_zone=2)
+        env = TetrisEnv(config, tetris_config)
+
+        env.reset(seed=1)
+
+        self.assertEqual(env.game.board.vanish_zone, tetris_config.vanish_zone)
+
+
 class BoardEncoderTests(unittest.TestCase):
     def test_forward_preserves_batch_and_placement_dimensions(self):
         encoder = BoardEncoder(height=25, width=10, d_model=156)
 
-        output = encoder(torch.zeros(2, 3, 25, 10))
+        output = encoder(torch.zeros(2, 3, 25, 10, dtype=torch.uint8))
 
         self.assertEqual(output.shape, (2, 3, 156))
+
+    def test_all_invalid_uint8_boards_return_float_tokens(self):
+        encoder = BoardEncoder(height=8, width=8, d_model=4, ch=2, k=1)
+
+        output = encoder(
+            torch.zeros(1, 2, 8, 8, dtype=torch.uint8),
+            torch.tensor([[False, False]]),
+        )
+
+        self.assertEqual(output.dtype, torch.float32)
 
     def test_wide_k_configures_residual_width(self):
         config = Configuration()
@@ -108,6 +153,7 @@ class ResumeStateTests(unittest.TestCase):
         self.assertEqual(state["curriculum"]["stage_completed_steps"], 500)
         self.assertEqual(state["curriculum"]["global_steps"], 1500)
         self.assertEqual(_stage_index_from_checkpoint("models/w8/model.zip", [(4, 1000), (8, 2000)]), 1)
+        self.assertEqual(_stage_index_from_checkpoint("models/w-1/model.zip", [(4, 1000), (-1, 2000)]), 1)
 
 
 if __name__ == "__main__":
