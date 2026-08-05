@@ -8,6 +8,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.utils import LinearSchedule
 
 from maikol_utils.print_utils import print_separator, print_warn
+from maikol_utils.file_utils import make_dirs
 
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
@@ -125,7 +126,7 @@ def _warn_resume_config_differences(
 
 
 def _stage_index_from_checkpoint(model_path: str, stages: list[tuple[int, int]]) -> int:
-    match = re.search(r"(?:^|[/\\_])w(\d+)(?:[/\\]|\.zip$)", model_path)
+    match = re.search(r"(?:^|[/\\_])w(-?\d+)(?=[/\\_.]|$)", model_path)
     if match:
         board_width = int(match.group(1))
         for index, (stage_width, _) in enumerate(stages):
@@ -204,7 +205,8 @@ def _run_stage(
     if stage_label:
         ckpt_dir = os.path.join(ckpt_dir, stage_label)
         ckpt_prefix = f"turbomino_{stage_label}_ckpt"
-    os.makedirs(ckpt_dir, exist_ok=True)
+
+    make_dirs(ckpt_dir)
 
     stage_end = model.num_timesteps + stage_timesteps
     stage_end_lr = CONFIG.lr_end + (CONFIG.learning_rate - CONFIG.lr_end) * max(
@@ -225,6 +227,19 @@ def _run_stage(
         use_curriculum_gate=use_curriculum_gate,
     )
 
+    def save_best_model_state(model_path, num_timesteps, learned):
+        stage_completed_steps = max(0, num_timesteps - stage_start_global_steps)
+        _save_resume_state(
+            model_path,
+            CONFIG,
+            T_CONFIG,
+            stage_index,
+            stage_start_global_steps,
+            stage_target_steps,
+            stage_completed_steps,
+            learned if use_curriculum_gate else stage_completed_steps >= stage_target_steps,
+        )
+
     validation = TetrisValidationCallback(
         eval_env=eval_env,
         eval_freq=CONFIG.eval_steps(),
@@ -237,6 +252,7 @@ def _run_stage(
         model_path_template=os.path.join(
             ckpt_dir, f"{ckpt_prefix}_{{num_timesteps}}_steps.zip"
         ),
+        on_best_model=save_best_model_state,
     )
 
     ent_anneal = EntropyAnnealCallback(
@@ -246,7 +262,7 @@ def _run_stage(
     )
 
     checkpoint.validation = validation
-    callbacks = [progress, validation, checkpoint, ent_anneal]
+    callbacks = [progress, checkpoint, validation, ent_anneal]
 
     try:
         model.learn(
@@ -279,7 +295,7 @@ def train_ppo_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         curriculum = {T_CONFIG.board_w: CONFIG.total_timesteps}
 
     # --- Curriculum mode ---
-    stages = sorted(curriculum.items())
+    stages = list(curriculum.items())
     total_curriculum = sum(t for _, t in stages)
     if CONFIG.curriculum:
         print_warn(f"Curriculum active — `total_timesteps` ({CONFIG.total_timesteps:_}) "
@@ -448,16 +464,17 @@ def train_ppo_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         )
     print(f" - Final model saved to {CONFIG.final_model_path}")
 
-    _, scores, _, pieces, _, _ = test_on_game(
-        CONFIG=CONFIG,
-        T_CONFIG=T_CONFIG,
-        eval_seed=(
-            CONFIG.eval_seed + CONFIG.eval_episodes
-            if CONFIG.eval_seed is not None
-            else None
-        ),
-    )
-    print(
-        f" - Final held-out evaluation: score={sum(scores) / len(scores):.1f}, "
-        f"pieces=min:{min(pieces)}, avg:{sum(pieces) / len(pieces):.1f}, max:{max(pieces)}"
-    )
+    if CONFIG.run_final_eval:
+        _, scores, _, pieces, _, _ = test_on_game(
+            CONFIG=CONFIG,
+            T_CONFIG=T_CONFIG,
+            eval_seed=(
+                CONFIG.eval_seed + CONFIG.eval_episodes
+                if CONFIG.eval_seed is not None
+                else None
+            ),
+        )
+        print(
+            f" - Final held-out evaluation: score={sum(scores) / len(scores):.1f}, "
+            f"pieces=min:{min(pieces)}, avg:{sum(pieces) / len(pieces):.1f}, max:{max(pieces)}"
+        )

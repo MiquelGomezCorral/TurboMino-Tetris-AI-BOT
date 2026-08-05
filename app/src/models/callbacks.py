@@ -84,6 +84,7 @@ class TetrisValidationCallback(BaseCallback):
         min_score: float = 0.0, eval_seed: int | None = None,
         best_model_path: str | None = None,
         model_path_template: str | None = None,
+        on_best_model=None,
         verbose: int = 1,
     ):
         super().__init__(verbose)
@@ -96,22 +97,23 @@ class TetrisValidationCallback(BaseCallback):
         self.eval_seed = eval_seed
         self.best_model_path = best_model_path
         self.model_path_template = model_path_template
+        self.on_best_model = on_best_model
         self.saved_best_model_path = None
         self.best_key = None
         self.learned = False
 
 
     def _on_training_start(self):
-        self._on_step()  # Run validation at the start of training
+        return None
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.eval_freq == 0: # and self.n_calls > 0:
+        if self.n_calls > 0 and self.n_calls % self.eval_freq == 0:
             model_path = None
             if self.model_path_template:
                 model_path = self.model_path_template.format(
                     num_timesteps=self.num_timesteps
                 )
-                if self.n_calls == 0 or not os.path.exists(model_path):
+                if not os.path.exists(model_path):
                     self.model.save(model_path)
             rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
                 CONFIG=self.eval_env.CONFIG,
@@ -161,6 +163,8 @@ class TetrisValidationCallback(BaseCallback):
                 self.best_model_path = self.best_model_path or f"{self.model.tensorboard_log}/best_model.zip"
                 self.model.save(self.best_model_path)
                 self.saved_best_model_path = self.best_model_path
+                if self.on_best_model:
+                    self.on_best_model(self.best_model_path, self.num_timesteps, self.learned)
                 if self.verbose > 0:
                     print(f"\n - New best validation score: {mean_score:.2f}! Model saved.")
 
