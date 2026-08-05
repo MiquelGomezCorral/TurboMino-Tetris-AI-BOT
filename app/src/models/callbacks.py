@@ -96,8 +96,12 @@ class TetrisValidationCallback(BaseCallback):
         self.best_key = None
         self.learned = False
 
+
+    def _on_training_start(self):
+        self._on_step()  # Run validation at the start of training
+
     def _on_step(self) -> bool:
-        if self.n_calls % self.eval_freq == 0 and self.n_calls > 0:
+        if self.n_calls % self.eval_freq == 0: # and self.n_calls > 0:
             rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
                 n_eval_episodes=self.n_eval_episodes,
                 max_pieces=self.max_pieces,
