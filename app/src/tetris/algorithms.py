@@ -25,7 +25,7 @@ class MoveSearcher:
           - 'bitmap': a 1D uint32 numpy array representing the new board state
           - 'lines_cleared': int (only when clear_lines=True)
         """
-        if self.game is None and (piece_type is None or board is None):
+        if self.game is None:
             raise ValueError("MoveSearcher must be initialized with a Tetris game instance")
 
         if piece_type is None:
@@ -156,7 +156,7 @@ class MoveSearcher:
         # A. Active Queue Scenario
         active_q_matrix = self._build_single_queue_context(
             active_val=active_piece_type,
-            hold_val=hold_piece_type,
+            hold_val=self.game.get_hold_piece_type(),
             upcoming_vals=queue_list
         )
         
@@ -179,7 +179,7 @@ class MoveSearcher:
             self.CONFIG.max_placements,
             self.CONFIG.max_board_size_h + self.T_CONFIG.vanish_zone,
             self.CONFIG.max_board_size_w
-        ), dtype=np.float32)
+        ), dtype=np.uint8)
         
         queue_idx_matrix = np.zeros(self.CONFIG.max_placements, dtype=np.int64)
 
@@ -241,7 +241,7 @@ class MoveSearcher:
         # Bitwise shift and mask out individual cell bits
         unpacked_2d = (expanded_rows >> shifts) & 1
         
-        return unpacked_2d.astype(np.float32)
+        return unpacked_2d.astype(np.uint8)
     
 
     def valid_action_mask(self):

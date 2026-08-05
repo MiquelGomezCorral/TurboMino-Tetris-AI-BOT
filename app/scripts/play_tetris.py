@@ -11,7 +11,7 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
     clock = pygame.time.Clock()
 
     # Initialize Engine (Must use color_map=True to render official colors)
-    game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, color_map=True)
+    game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, vanish_zone=CONFIG.vanish_zone, color_map=True)
 
     # Gravity Timer
     GRAVITY_EVENT = pygame.USEREVENT + 1
@@ -46,7 +46,7 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
             # --- Input Handling ---
             elif event.type == pygame.KEYDOWN:
                 if event.key == keys["RESET"]:
-                    game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, color_map=True)
+                    game = Tetris(width=CONFIG.board_w, height=CONFIG.board_h, vanish_zone=CONFIG.vanish_zone, color_map=True)
                     das_state.clear()
                     continue
 

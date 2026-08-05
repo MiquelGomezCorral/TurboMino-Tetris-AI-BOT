@@ -110,11 +110,11 @@ class BoardEncoder(nn.Module):
 
     def forward(self, boards, valid_mask=None):  # (B, M, H, W) -> (B, M, d_model)
         b, m = boards.shape[:2]
-        x = rearrange(boards, "b m h w -> (b m) 1 h w")
+        x = rearrange(boards.float(), "b m h w -> (b m) 1 h w")
         if valid_mask is not None:
             valid_mask = valid_mask.bool().reshape(-1)
             if not valid_mask.any():
-                return boards.new_zeros((b, m, self.proj.out_features))
+                return x.new_zeros((b, m, self.proj.out_features))
             x = x[valid_mask]
         x = self.pool(self.conv_1(self.res_1(self.stem(x))))
         x = self.pool(self.conv_2(self.res_2(x)))

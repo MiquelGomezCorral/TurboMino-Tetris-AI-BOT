@@ -2,6 +2,8 @@ import gymnasium as gym
 import random
 from gymnasium import spaces
 import numpy as np
+from copy import copy
+
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
@@ -27,7 +29,7 @@ class TetrisEnv(gym.Env):
             "boards": spaces.Box(
                 low=0.0, high=1.0, 
                 shape=(CONFIG.max_placements, CONFIG.max_board_size_h + T_CONFIG.vanish_zone, CONFIG.max_board_size_w), 
-                dtype=np.float32
+                dtype=np.uint8
             ),
             "queues": spaces.Box(
                 low=0.0, high=1.0, 
@@ -56,16 +58,16 @@ class TetrisEnv(gym.Env):
         self.game = None
         self.searcher = None
         self.all_placements = []
+        self._heuristic_score = None
 
 
     def step(self, action):
         # =========== 1. Execute the sequence chosen by the neural network =========== 
         chosen_placement, _ = self.all_placements[action]
 
-        heuristic_before = (
-            self.evaluator.evaluate(self.game.board).compute_total()
-            if self.CONFIG.use_heuristic_rewards else 0.0
-        )
+        if self.CONFIG.use_heuristic_rewards and self._heuristic_score is None:
+            self._heuristic_score = self.evaluator.evaluate(self.game.board).compute_total()
+        heuristic_before = self._heuristic_score or 0.0
         for act in chosen_placement['sequence']:
             self.game.move_active_piece(act)
 
@@ -93,7 +95,8 @@ class TetrisEnv(gym.Env):
                     reward += self.CONFIG.t_spin_reward
 
             if self.CONFIG.use_heuristic_rewards:
-                heuristic_delta = self.evaluator.evaluate(self.game.board).compute_total() - heuristic_before
+                self._heuristic_score = self.evaluator.evaluate(self.game.board).compute_total()
+                heuristic_delta = self._heuristic_score - heuristic_before
                 reward += float(np.clip(
                     heuristic_delta * self.CONFIG.heuristic_reward_scale,
                     -self.CONFIG.heuristic_reward_cap,
@@ -115,14 +118,19 @@ class TetrisEnv(gym.Env):
         
         # Initialize your engine
         self.game = Tetris(
-            width=self.T_CONFIG.board_w,
-            height=self.T_CONFIG.board_h,
+            width=self._get_new_board_width(),
+            height=self.T_CONFIG_AUX.board_h,
+            vanish_zone=self.T_CONFIG_AUX.vanish_zone,
             garbage_prob=self.CONFIG.garbage_prob,
             garbage_delay=self.CONFIG.garbage_delay,
             garbage_lines_probs=self.CONFIG.garbage_lines_probs,
             garbage_cap=self.CONFIG.garbage_cap,
         )
-        self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG)
+        self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG_AUX)
+        self._heuristic_score = (
+            self.evaluator.evaluate(self.game.board).compute_total()
+            if self.CONFIG.use_heuristic_rewards else None
+        )
         
         obs = self._get_obs()
         return obs, {}
@@ -152,7 +160,19 @@ class TetrisEnv(gym.Env):
         """Returns the underlying Tetris game instance for rendering or analysis."""
         return self.game
     
+    def _get_new_board_width(self):
+        """Determines the board width based on curriculum or random width settings."""
+        if self.CONFIG.random_width and self.T_CONFIG.board_w == -1:
+            width = np.random.choice(
+                list(self.CONFIG.random_width.keys()),
+                p=list(self.CONFIG.random_width.values())
+            )
+        else:
+            width = self.T_CONFIG.board_w
 
+        self.T_CONFIG_AUX = copy(self.T_CONFIG)
+        self.T_CONFIG_AUX.board_w = int(width)
+        return int(width)
 
 # ==========================================
 # 2. Env factories
