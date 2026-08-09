@@ -17,7 +17,7 @@ class TetrisEnv(gym.Env):
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
 
-        assert self.CONFIG.max_board_size_h >= self.T_CONFIG.board_h, "CONFIG.max_board_size_h must be >= T_CONFIG.board_h + T_CONFIG.vanish_zone"
+        assert self.CONFIG.max_board_size_h >= self.T_CONFIG.board_h, "CONFIG.max_board_size_h must be >= T_CONFIG.board_h"
         assert self.CONFIG.max_board_size_w >= self.T_CONFIG.board_w, "CONFIG.max_board_size_w must be >= T_CONFIG.board_w"
 
         self.evaluator = HeuristicEvaluator()
