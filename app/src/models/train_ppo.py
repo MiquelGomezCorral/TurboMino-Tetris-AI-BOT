@@ -14,6 +14,7 @@ from src.config.checkpoints import (
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from .callbacks import (
+    PPOProgressCallback,
     TetrisValidationCallback,
 )
 from .utils import load_model, create_fresh_model
@@ -136,14 +137,14 @@ def _run_stage(
     )
 
     checkpoint.validation = validation
-    callbacks = [validation, checkpoint]
+    callbacks = [validation, checkpoint, PPOProgressCallback(stage_timesteps)]
 
     try:
         model.learn(
             total_timesteps=stage_timesteps,
             callback=callbacks,
             reset_num_timesteps=False,
-            progress_bar=True,
+            progress_bar=False,
         )
     except KeyboardInterrupt:
         print(f"\n - Stage interrupted by user (step {model.num_timesteps:_}).")

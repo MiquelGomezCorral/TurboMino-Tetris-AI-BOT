@@ -15,6 +15,79 @@ def _curriculum_gate_passed(scores, pieces, max_pieces: int, learned_ratio: floa
     return score_ratio >= learned_ratio and survival_ratio >= learned_ratio, score_ratio, survival_ratio
 
 
+class PPOProgressCallback(BaseCallback):
+    """Write reliable sample and optimization progress lines to the log."""
+
+    def __init__(self, total_timesteps: int):
+        super().__init__(verbose=0)
+        self.total_timesteps = total_timesteps
+        self._rollout_buffer = None
+        self._original_get = None
+        self._update_index = 0
+        self._epoch = 0
+
+    def _on_training_start(self):
+        self._start_timesteps = self.model.num_timesteps
+        self._wrap_rollout_buffer()
+        self._print_samples()
+
+    def _on_step(self) -> bool:
+        return True
+
+    def _on_rollout_end(self):
+        self._update_index += 1
+        self._epoch = 0
+        self._print_samples()
+        self._print_epochs()
+
+    def _wrap_rollout_buffer(self):
+        self._rollout_buffer = self.model.rollout_buffer
+        self._original_get = self._rollout_buffer.get
+
+        def get(batch_size=None):
+            for rollout_data in self._original_get(batch_size):
+                yield rollout_data
+            else:
+                self._epoch += 1
+                self._print_epochs()
+
+        self._rollout_buffer.get = get
+
+    def _print_samples(self):
+        completed = max(0, self.num_timesteps - self._start_timesteps)
+        shown = min(self.total_timesteps, completed)
+        ratio = shown / self.total_timesteps if self.total_timesteps else 1.0
+        bar = _progress_bar(ratio)
+        print(
+            f"[ppo samples] |{bar}| {shown:,}/{self.total_timesteps:,} "
+            f"({ratio:.1%})",
+            flush=True,
+        )
+
+    def _print_epochs(self, partial=False):
+        total_epochs = self.model.n_epochs
+        ratio = self._epoch / total_epochs if total_epochs else 1.0
+        suffix = " partial" if partial else ""
+        print(
+            f"[ppo epochs] update={self._update_index} |{_progress_bar(ratio)}| "
+            f"{self._epoch}/{total_epochs}{suffix}",
+            flush=True,
+        )
+
+    def _on_training_end(self):
+        if self._update_index and self._epoch < self.model.n_epochs:
+            self._print_epochs(partial=True)
+        self._print_samples()
+        if self._rollout_buffer is not None and self._original_get is not None:
+            self._rollout_buffer.get = self._original_get
+            self._original_get = None
+
+
+def _progress_bar(ratio: float, width: int = 24) -> str:
+    filled = round(max(0.0, min(1.0, ratio)) * width)
+    return "#" * filled + "-" * (width - filled)
+
+
 class TetrisValidationCallback(BaseCallback):
     def __init__(
         self, eval_env, best_model_path: str, eval_freq: int = 10000, n_eval_episodes: int = 5,
