@@ -88,6 +88,7 @@ if __name__ == "__main__":
     p_showcase.add_argument("--model_path", type=str, default=None, help="Path to the trained model (default: None)")
     p_showcase.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
     p_showcase.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
+    p_showcase.add_argument("--garbage_prob", type=float, default=None, help=f"Chance of receiving garbage after each placement (default: {Configuration.garbage_prob})")
     p_showcase.set_defaults(func=cmd_showcase)
     # ======================================================================================
     #                                       CALL
