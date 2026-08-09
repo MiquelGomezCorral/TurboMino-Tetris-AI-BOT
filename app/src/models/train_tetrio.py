@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 
 from maikol_utils.print_utils import print_separator
+from maikol_utils.file_utils import make_dirs
 
 from src.data import load_tetrio_data
 from src.models import TurboMinoModule, TetrisEnv
@@ -17,6 +18,7 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
         T_CONFIG (TetrisConfiguration): The configuration object containing tetris-specific parameters.
     """
     pl.seed_everything(CONFIG.seed, workers=True)
+    make_dirs([CONFIG.LOGS_PATH, CONFIG.pretrain_model_path])
 
     print_separator("Loading Configuration", sep_type="SHORT")
     CONFIG.print_config()
@@ -51,5 +53,5 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 
-    CONFIG.final_model_path = trainer.checkpoint_callback.best_model_path
+    CONFIG.final_model_path = trainer.checkpoint_callbacks[0].best_model_path
     test_model(CONFIG, T_CONFIG)

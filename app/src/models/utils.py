@@ -70,24 +70,24 @@ class AfterstateActorCriticPolicy(MaskableActorCriticPolicy):
 
 
 def _only_board_dtype_differs(saved_space, current_space) -> bool:
-    if not isinstance(saved_space, spaces.Dict) or not isinstance(current_space, spaces.Dict):
-        return False
-    if saved_space.spaces.keys() != current_space.spaces.keys():
+    if (not isinstance(saved_space, spaces.Dict) or not isinstance(current_space, spaces.Dict)) or (saved_space.spaces.keys() != current_space.spaces.keys()):
         return False
 
     for key in saved_space.spaces:
         saved_subspace = saved_space[key]
         current_subspace = current_space[key]
         if key == "boards":
-            if not isinstance(saved_subspace, spaces.Box) or not isinstance(current_subspace, spaces.Box):
-                return False
-            if saved_subspace.shape != current_subspace.shape:
-                return False
-            if not np.array_equal(saved_subspace.low, current_subspace.low):
-                return False
-            if not np.array_equal(saved_subspace.high, current_subspace.high):
-                return False
-            if saved_subspace.dtype == current_subspace.dtype:
+            if (
+                not isinstance(saved_subspace, spaces.Box) or not isinstance(current_subspace, spaces.Box)
+            ) or (
+                saved_subspace.shape != current_subspace.shape
+            ) or (
+                not np.array_equal(saved_subspace.low, current_subspace.low)
+            ) or (
+                not np.array_equal(saved_subspace.high, current_subspace.high)
+            ) or (
+                saved_subspace.dtype == current_subspace.dtype
+            ):
                 return False
         elif saved_subspace != current_subspace:
             return False

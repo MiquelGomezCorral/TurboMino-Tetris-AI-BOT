@@ -7,7 +7,6 @@ import os
 import math
 from dataclasses import dataclass, field
 
-from maikol_utils.file_utils import make_dirs
 from maikol_utils.print_utils import print_separator
 import yaml
 
@@ -38,6 +37,7 @@ class Configuration:
     checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints", exp_name)
     log_dir: str = os.path.join(LOGS_PATH, f"tensorboard_{exp_name}")
     final_model_path: str = os.path.join(MODELS_PATH, f"tetris_turbomino_{exp_name}.zip")
+    best_model_path: str = os.path.join(MODELS_PATH, "checkpoints", exp_name, "best_model.zip")
 
     model_path: str = None
     resume_model_path: str = None
@@ -83,10 +83,8 @@ class Configuration:
     net_arch: list[int] = field(default_factory=lambda: [156])
     features_per_placement: int = 4
     learning_rate: float = 3e-4
-    lr_end: float = 1e-5
     rollout_samples: int = 2_048
     ent_coef: float = 0.02
-    ent_coef_end: float = 0.001
     clip_range: float = 0.2
     gamma: float = 0.999
     gae_lambda: float = 0.98
@@ -160,16 +158,9 @@ class Configuration:
         self.log_dir = os.path.join(self.LOGS_PATH, f"tensorboard_{self.exp_name}")
         self.checkpoint_dir = os.path.join(self.MODELS_PATH, "checkpoints", self.exp_name)
         self.final_model_path = os.path.join(self.MODELS_PATH, f"tetris_turbomino_{self.exp_name}.zip")
+        self.best_model_path = os.path.join(self.checkpoint_dir, "best_model.zip")
         if self.model_path is None:
             self.model_path = self.final_model_path
-
-        make_dirs([
-            self.DATA_PATH, 
-            self.MODELS_PATH, 
-            self.LOGS_PATH,
-            self.checkpoint_dir,
-            self.log_dir,
-        ])
 
         
     def load_yaml(self, yaml_file: str) -> None:
