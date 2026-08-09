@@ -151,12 +151,14 @@ class MoveSearcher:
         hold_placements = self.get_all_placements(piece_type=PieceEnum(hold_piece_type), prepend_hold=True)
 
         # ==========  2. Build the two unique queue contexts ========== 
-        queue_list = self.game.get_queue() 
+        queue_list = self.game.get_queue()
+        # Hold slot always shows the swap piece; the queue is shown post-swap (shifted when hold is empty).
+        queue_list = queue_list if had_hold else queue_list[1:]
         
         # A. Active Queue Scenario
         active_q_matrix = self._build_single_queue_context(
             active_val=active_piece_type,
-            hold_val=self.game.get_hold_piece_type(),
+            hold_val=hold_piece_type,
             upcoming_vals=queue_list
         )
         
@@ -165,7 +167,7 @@ class MoveSearcher:
             active_val=hold_piece_type,
             hold_val=active_piece_type,
             # Normal swap
-            upcoming_vals=queue_list if had_hold else queue_list[1:]
+            upcoming_vals=queue_list
         )
 
         # Stack into shape (2, S, C)

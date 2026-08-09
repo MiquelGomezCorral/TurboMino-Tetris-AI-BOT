@@ -123,7 +123,7 @@ class GarbageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MoveSearcher().get_all_placements()
 
-    def test_active_queue_uses_empty_hold_slot(self):
+    def test_active_queue_uses_swap_piece_when_hold_empty(self):
         config = Configuration(max_board_size_h=8, max_board_size_w=4)
         tetris_config = TetrisConfiguration(board_w=4, board_h=8, vanish_zone=0)
         game = Tetris(
@@ -137,7 +137,8 @@ class GarbageTests(unittest.TestCase):
 
         _, features = MoveSearcher(game, config, tetris_config).get_all_features()
 
-        self.assertEqual(np.argmax(features["queues"][0, 1]), PieceEnum.N.value)
+        self.assertEqual(np.argmax(features["queues"][0, 1]), PieceEnum.O.value)
+        self.assertEqual(np.argmax(features["queues"][0, 2]), PieceEnum.T.value)
 
 
 class TetrioDataTests(unittest.TestCase):
