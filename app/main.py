@@ -2,20 +2,21 @@
 
 import dotenv
 import argparse
-from src.config import Configuration
-from src.tetris import TetrisConfiguration
 from maikol_utils.other_utils import args_to_dataclass
 from maikol_utils.print_utils import print_separator
 
+from src.config import Configuration
+from src.tetris import TetrisConfiguration
+from scripts import showcase_model, play_tetris_game
 from src.models import train_ppo_turbomino, train_tetrio_turbomino
 
 def cmd_play_tetris(args: argparse.Namespace):
     """Call play_tetris_from_config_list with the given args."""
-    from scripts.play_tetris import play_tetris_game
 
-    CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
+    T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
     print_separator("START TETRIS", sep_type="START")
-    play_tetris_game(CONFIG)
+
+    play_tetris_game(CONFIG=T_CONFIG)
     print_separator("END TETRIS", sep_type="START")
 
 def cmd_train_ppo(args):
@@ -37,12 +38,10 @@ def cmd_train_tetrio(args):
 
 def cmd_showcase(args):
     """Call showcase functions."""
-    from scripts.showcase import showcase_model
-
     print_separator("START SHOWCASE", sep_type="START")
     CONFIG: Configuration = args_to_dataclass(args, Configuration)
     T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
-    showcase_model(CONFIG, T_CONFIG)
+    showcase_model(CONFIG, T_CONFIG, use_ui=getattr(args, "ui", False))
 
 # ======================================================================================
 #                                       ARGUMENTS
@@ -61,6 +60,9 @@ if __name__ == "__main__":
     p_play = subparsers.add_parser("play-tetris", help="Play Tetris")
     p_play.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
     p_play.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
+    p_play.add_argument("--agent", action="store_true", help="Run the trained agent in the UI instead of human controls")
+    p_play.add_argument("--exp_name", type=str, default=None, help="Experiment name for the agent model (default: None)")
+    p_play.add_argument("--model_path", type=str, default=None, help="Path to the trained agent model (default: None)")
     p_play.set_defaults(func=cmd_play_tetris)
 
     # ======================================================================================
@@ -86,6 +88,7 @@ if __name__ == "__main__":
     p_showcase = subparsers.add_parser("showcase", help="Showcase the trained model")
     p_showcase.add_argument("--exp_name", type=str, default="base_name", help="Experiment name for logging and model saving (default: base_name)")
     p_showcase.add_argument("--model_path", type=str, default=None, help="Path to the trained model (default: None)")
+    p_showcase.add_argument("--ui", action="store_true", help="Render the agent in the Pygame window instead of the terminal")
     p_showcase.add_argument("-W","--board_w", type=int, default=10, help="Board width (default: 10)")
     p_showcase.add_argument("-H","--board_h", type=int, default=20, help="Board height (default: 20)")
     p_showcase.add_argument("--garbage_prob", type=float, default=None, help=f"Chance of receiving garbage after each placement (default: {Configuration.garbage_prob})")

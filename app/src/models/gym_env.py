@@ -11,11 +11,12 @@ from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, HeuristicEvalu
 from src.config import Configuration
 
 class TetrisEnv(gym.Env):
-    def __init__(self, CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
+    def __init__(self, CONFIG: Configuration, T_CONFIG: TetrisConfiguration, color_map: bool = False):
         super().__init__()
 
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
+        self.color_map = color_map
 
         assert self.CONFIG.max_board_size_h >= self.T_CONFIG.board_h, "CONFIG.max_board_size_h must be >= T_CONFIG.board_h"
         assert self.CONFIG.max_board_size_w >= self.T_CONFIG.board_w, "CONFIG.max_board_size_w must be >= T_CONFIG.board_w"
@@ -121,6 +122,7 @@ class TetrisEnv(gym.Env):
             width=self._get_new_board_width(),
             height=self.T_CONFIG_AUX.board_h,
             vanish_zone=self.T_CONFIG_AUX.vanish_zone,
+            color_map=self.color_map,
             garbage_prob=self.CONFIG.garbage_prob,
             garbage_delay=self.CONFIG.garbage_delay,
             garbage_lines_probs=self.CONFIG.garbage_lines_probs,
