@@ -1,8 +1,8 @@
 import pygame
 import sys
 
-from src.tetris import Tetris, PieceEnum, ActionEnum, TetrisConfiguration
-from src.tetris.visualization import draw_cell, draw_garbage_bar, draw_ui_piece, draw_text
+from src.tetris import Tetris, ActionEnum, TetrisConfiguration
+from src.tetris.visualization import render_game
 
 def play_tetris_game(CONFIG: TetrisConfiguration):
     pygame.init()
@@ -97,95 +97,7 @@ def play_tetris_game(CONFIG: TetrisConfiguration):
 
         # --- Rendering ---
         screen.fill(CONFIG.bg_color)
-
-        total_h = game.board.height      # 24 (visible 20 + vanish 4)
-        vis_h = game.board.visible_height
-
-        # 1. Draw Vanish Zone Background
-        vz_rect = pygame.Rect(
-            CONFIG.board_offset_x * CONFIG.cell_size, 0,
-            CONFIG.board_w * CONFIG.cell_size,
-            (total_h - vis_h) * CONFIG.cell_size
-        )
-        pygame.draw.rect(screen, CONFIG.vz_color, vz_rect)
-
-        # 2. Draw Board Stack & Grid (y=0..total_h-1)
-        for y in range(total_h):
-            for x in range(game.board.width):
-                screen_y = (total_h - 1 - y)
-                color_val = game.board.c_rows[y, x]
-                if color_val != 0:
-                    piece_enum = PieceEnum(color_val)
-                    draw_cell(CONFIG, screen, CONFIG.board_offset_x + x, screen_y, CONFIG.colors[piece_enum])
-                elif y < vis_h:
-                    # Empty cell in visible area → draw grid border
-                    rect = pygame.Rect(
-                        (CONFIG.board_offset_x + x) * CONFIG.cell_size,
-                        screen_y * CONFIG.cell_size,
-                        CONFIG.cell_size, CONFIG.cell_size
-                    )
-                    pygame.draw.rect(screen, CONFIG.grid_color, rect, 1)
-
-        # 3. Draw incoming garbage
-        draw_garbage_bar(CONFIG, screen, tuple(game.incoming_garbage), total_h, vis_h)
-
-        # 4. Draw Active Piece (all rows, including vanish zone)
-        active = game.active_piece
-        color = CONFIG.colors[active.type]
-        for local_y, row_mask in enumerate(active.current_mask):
-            if row_mask == 0: continue
-            by = active.y + local_y
-            if 0 <= by < total_h:
-                screen_y = (total_h - 1 - by)
-                for local_x in range(4):
-                    if row_mask & (1 << local_x):
-                        bx = active.x + local_x
-                        draw_cell(CONFIG, screen, CONFIG.board_offset_x + bx, screen_y, color)
-
-        # 5. Draw Ghost Piece (all rows, including vanish zone)
-        ghost_y = game.board.get_ghost_y(active)
-        ghost_color = [int(c * 0.2 + 255 * 0.8) for c in color]
-        for local_y, row_mask in enumerate(active.current_mask):
-            if row_mask == 0: continue
-            by = ghost_y + local_y
-            if 0 <= by < total_h:
-                screen_y = (total_h - 1 - by)
-                for local_x in range(4):
-                    if row_mask & (1 << local_x):
-                        bx = active.x + local_x
-                        rect = pygame.Rect((CONFIG.board_offset_x + bx) * CONFIG.cell_size, screen_y * CONFIG.cell_size, CONFIG.cell_size, CONFIG.cell_size)
-                        pygame.draw.rect(screen, ghost_color, rect, 2)
-
-        # 6. Draw Hold Piece
-        hold_piece = game.get_swap_piece()
-        draw_ui_piece(CONFIG, screen, hold_piece, CONFIG.hold_offset_x, 1, disabled=not game.can_hold)
-
-        # 7. Draw Stats (Level, Lines, Combo) under hold piece
-        ss = game.score_system
-        if ss.get_combo() <= 0:
-            combo_str = "---"
-        else:
-            combo_str = f"x{ss.get_combo()}"
-        draw_text(CONFIG, screen, f"Level {ss.level}", CONFIG.hold_offset_x, 5)
-        draw_text(CONFIG, screen, f"Lines {ss.lines_cleared_total}", CONFIG.hold_offset_x, 6)
-        draw_text(CONFIG, screen, f"Combo {combo_str}", CONFIG.hold_offset_x, 7)
-        draw_text(CONFIG, screen, f"B2B active {'ON' if ss.get_b2b_active() else 'OFF'}", CONFIG.hold_offset_x, 8)
-        draw_text(CONFIG, screen, f'Move: {ss.last_move_name if ss.last_move_name else "---"}', CONFIG.hold_offset_x, 9)
-
-        # 8. Draw Next Queue (Next 5 pieces)
-        next_pieces = game.get_next_pieces()[:5] # Returns list of string names
-        for i, piece_name in enumerate(next_pieces):
-            piece_type = PieceEnum[piece_name]
-            # Space them out vertically by 3 cells
-            draw_ui_piece(CONFIG, screen, piece_type, CONFIG.next_offset_x, 1 + (i * 3))
-
-        # 9. Draw Score under next pieces
-        draw_text(CONFIG, screen, f"Score {ss.score}", CONFIG.next_offset_x, 16)
-
-        # 10. Game Over overlay
-        if game.game_over:
-            draw_text(CONFIG, screen, "GAME OVER", CONFIG.board_offset_x + 2, total_h + 1, font_size=50, color=CONFIG.game_over_color)
-            draw_text(CONFIG, screen, "Press R to restart", CONFIG.board_offset_x + 2.5, total_h + 2.5, font_size=30, color=CONFIG.game_over_color)
+        render_game(CONFIG, screen, game)
 
         pygame.display.flip()
         clock.tick(60)
