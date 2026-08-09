@@ -2,6 +2,7 @@ import copy
 import os
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 import numpy as np
 import torch
@@ -10,11 +11,36 @@ from torch import nn
 from src.config import Configuration
 from src.models.TurboMino import BoardEncoder, TurboMinoEncoder, TurboMinoModule
 from src.models.gym_env import TetrisEnv
-from src.models.train_ppo import _load_resume_state, _save_resume_state, _stage_index_from_checkpoint
+from src.models.train_ppo import _stage_progress
+from src.models.train_ppo_utils import (
+    _load_resume_state,
+    _save_resume_state,
+    _stage_index_from_checkpoint,
+)
 from src.tetris import TetrisConfiguration
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_configuration_does_not_create_output_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Configuration(
+                DATA_PATH=os.path.join(directory, "data"),
+                MODELS_PATH=os.path.join(directory, "models"),
+                LOGS_PATH=os.path.join(directory, "logs"),
+                CONFIGS_PATH=os.path.join(directory, "configs"),
+                exp_name="test",
+            )
+
+            self.assertFalse(os.path.exists(config.DATA_PATH))
+            self.assertFalse(os.path.exists(config.MODELS_PATH))
+            self.assertFalse(os.path.exists(config.LOGS_PATH))
+            self.assertFalse(os.path.exists(config.checkpoint_dir))
+            self.assertFalse(os.path.exists(config.log_dir))
+            self.assertEqual(
+                config.best_model_path,
+                os.path.join(config.checkpoint_dir, "best_model.zip"),
+            )
+
     def test_eval_frequency_is_derived_from_rollout_count(self):
         config = Configuration(
             rollout_samples=10_000,
@@ -130,6 +156,36 @@ class BoardEncoderTests(unittest.TestCase):
 
 
 class ResumeStateTests(unittest.TestCase):
+    def test_stage_progress_uses_saved_start_when_resuming_same_width(self):
+        config = Configuration(
+            curriculum={4: 1000, 8: 2000},
+            resume_model_path="models/w8/model.zip",
+        )
+        model = SimpleNamespace(num_timesteps=1_500)
+        resume_state = {
+            "curriculum": {
+                "board_width": 8,
+                "stage_start_global_steps": 1_000,
+                "stage_complete": False,
+            }
+        }
+
+        start, completed = _stage_progress(
+            model, config, stage_idx=1, board_w=8, stage_time=2_000,
+            stage_start_global_steps=1_000, resume_state=resume_state,
+            resume_stage_index=1,
+        )
+
+        self.assertEqual((start, completed), (1_000, 500))
+
+        resume_state["curriculum"]["stage_complete"] = True
+        _, completed = _stage_progress(
+            model, config, stage_idx=1, board_w=8, stage_time=2_000,
+            stage_start_global_steps=1_000, resume_state=resume_state,
+            resume_stage_index=1,
+        )
+        self.assertEqual(completed, 2_000)
+
     def test_resume_state_preserves_curriculum_progress_and_config(self):
         config = Configuration(curriculum={4: 1000, 8: 2000})
         tetris_config = TetrisConfiguration(board_w=8)
