@@ -140,8 +140,9 @@ def test_on_game(
 ):
     eval_episodes = CONFIG.eval_episodes if eval_episodes is None else eval_episodes
     max_pieces = CONFIG.max_eval_pieces if max_pieces is None else max_pieces
+    eval_workers = 1 if torch.cuda.is_available() else CONFIG.num_workers
     with ProcessPoolExecutor(
-        max_workers=CONFIG.num_workers,
+        max_workers=eval_workers,
         mp_context=get_context("spawn"),
         initializer=_init_game_evaluator,
         initargs=(CONFIG, T_CONFIG, model_path, eval_seed, max_pieces),
