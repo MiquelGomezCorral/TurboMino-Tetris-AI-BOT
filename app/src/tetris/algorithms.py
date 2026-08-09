@@ -67,7 +67,7 @@ class MoveSearcher:
 
                     # Store using the footprint as the deduplication key
                     if self.CONFIG.clear_lines_on_placement:
-                        new_b_rows, lines_cleared = _clear_bitmap(new_b_rows, board.width, board.visible_height)
+                        new_b_rows, lines_cleared = _clear_bitmap(new_b_rows, board.width)
                     else:
                         lines_cleared = 0
 

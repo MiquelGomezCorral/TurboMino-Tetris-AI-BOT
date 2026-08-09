@@ -180,27 +180,21 @@ class ActivePiece:
         self.y = y
     
 
-def _clear_bitmap(b_rows, width, visible_height, c_rows=None):
+def _clear_bitmap(b_rows, width, c_rows=None):
     FULL = (1 << width) - 1
-    visible_slice = b_rows[:visible_height]
-    full_mask = visible_slice == FULL
+    full_mask = b_rows == FULL
     cleared = int(np.sum(full_mask))
     if cleared == 0:
         return (b_rows, c_rows, 0) if c_rows is not None else (b_rows, 0)
 
-    visible_kept = visible_slice[~full_mask]
-    above_visible = b_rows[visible_height:]
-    all_kept = np.concatenate((visible_kept, above_visible))
+    all_kept = b_rows[~full_mask]
 
     cleared_b = b_rows.copy()
     cleared_b[:len(all_kept)] = all_kept
     cleared_b[len(all_kept):] = 0
 
     if c_rows is not None:
-        visible_c = c_rows[:visible_height]
-        kept_c = visible_c[~full_mask]
-        above_c = c_rows[visible_height:]
-        all_kept_c = np.vstack((kept_c, above_c)) if len(above_c) > 0 else kept_c
+        all_kept_c = c_rows[~full_mask]
         cleared_c = c_rows.copy()
         cleared_c[:len(all_kept_c)] = all_kept_c
         cleared_c[len(all_kept_c):] = 0
@@ -335,13 +329,13 @@ class Board:
     def _clear_lines(self) -> int:
         if self.color_map:
             cleared_b, cleared_c, cleared = _clear_bitmap(
-                self.b_rows, self.width, self.visible_height, self.c_rows)
-            self.b_rows[:self.visible_height] = cleared_b[:self.visible_height]
-            self.c_rows[:self.visible_height] = cleared_c[:self.visible_height]
+                self.b_rows, self.width, self.c_rows)
+            self.b_rows[:] = cleared_b
+            self.c_rows[:] = cleared_c
         else:
             cleared_b, cleared = _clear_bitmap(
-                self.b_rows, self.width, self.visible_height)
-            self.b_rows[:self.visible_height] = cleared_b[:self.visible_height]
+                self.b_rows, self.width)
+            self.b_rows[:] = cleared_b
         return cleared
 
     def lock_piece(self, piece: ActivePiece) -> int:
