@@ -12,6 +12,27 @@ from src.tetris import ActionEnum, Board, MoveSearcher, PieceEnum, ScoringSystem
 
 
 class GarbageTests(unittest.TestCase):
+    def test_line_clear_compacts_rows_through_vanish_zone(self):
+        board = Board(width=4, height=3, vanish_zone=2, color_map=True)
+        board.b_rows[:] = [15, 2, 15, 15, 4]
+        board.c_rows[:] = [
+            [1, 1, 1, 1],
+            [0, 2, 0, 0],
+            [3, 3, 3, 3],
+            [4, 4, 4, 4],
+            [0, 0, 5, 0],
+        ]
+
+        self.assertEqual(board._clear_lines(), 3)
+        np.testing.assert_array_equal(board.b_rows, [2, 4, 0, 0, 0])
+        np.testing.assert_array_equal(board.c_rows, [
+            [0, 2, 0, 0],
+            [0, 0, 5, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ])
+
     def test_board_adds_garbage_with_one_hole(self):
         board = Board(width=4, height=4, vanish_zone=1, color_map=True)
         board.b_rows[0] = 1
