@@ -185,9 +185,7 @@ class MoveSearcher:
         
         queue_idx_matrix = np.zeros(self.CONFIG.max_placements, dtype=np.int64)
 
-        pad_h = max(0, self.CONFIG.max_board_size_h - (self.T_CONFIG.board_h + self.T_CONFIG.vanish_zone))
         pad_left = max(0, (self.CONFIG.max_board_size_w - self.T_CONFIG.board_w) // 2)
-        pad_right = max(0, self.CONFIG.max_board_size_w - self.T_CONFIG.board_w - pad_left)
         # Merge active and hold placements, tagging them with their queue index
         # 0 = Active, 1 = Hold
         placements_to_process = [(p, 0) for p in active_placements] + [(p, 1) for p in hold_placements]
@@ -203,8 +201,8 @@ class MoveSearcher:
             target_h = boards_matrix.shape[1]
             if grid.shape[0] > target_h:
                 grid = grid[:target_h]
-            pad_h = max(0, target_h - grid.shape[0])
-            boards_matrix[i] = np.pad(grid, ((0, pad_h), (pad_left, pad_right)), constant_values=1)
+            boards_matrix[i].fill(1)
+            boards_matrix[i, :grid.shape[0], pad_left:pad_left + grid.shape[1]] = grid
             queue_idx_matrix[i] = q_idx
             
             # Save to unified list for the step() function to execute later
