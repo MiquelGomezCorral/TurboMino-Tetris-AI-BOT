@@ -114,18 +114,18 @@ class Configuration:
     all_clear_reward: float = 0.4
     t_spin_reward: float = 0.2
 
-    garbage_prob: float = 0.0774
+    garbage_prob: float = 0.13
     garbage_delay: int = 5
     garbage_cap: int = 8
     garbage_lines_probs: list[float] = field(default_factory=lambda: [
-        0.263604,
-        0.155263,
-        0.099349,
-        0.151832,
-        0.145719,
-        0.087687,
-        0.032314,
-        0.064232,
+        0.244018,
+        0.147745,
+        0.147703,
+        0.146281,
+        0.098800,
+        0.096634,
+        0.081859,
+        0.036961,
     ])
     
     curriculum: dict = field(default_factory=dict)  # {board_w: timesteps}, e.g. {4: 1_000_000, 6: 1_000_000, 8: 1_000_000, 10: 2_000_000}
