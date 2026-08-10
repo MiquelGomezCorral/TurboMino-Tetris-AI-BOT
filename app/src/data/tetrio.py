@@ -12,6 +12,7 @@ MIRRORED_PIECE_INDICES = np.array([
     PIECE_MAPPING.get(PieceEnum(i), PieceEnum(i)).value
     for i in range(PieceEnum.L.value + 1)
 ])
+J_L_SWAP = str.maketrans("JL", "LJ")
 
 def _load_valid_indices(path: str) -> list[int] | None:
     if os.path.exists(path):
@@ -20,11 +21,11 @@ def _load_valid_indices(path: str) -> list[int] | None:
     return None
 
 
-def load_tetrio_loader(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, path: str ):
+def load_tetrio_loader(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, path: str, augment: bool = False):
     print(f" - Loading Tetrio data from {path}...")
     df = pd.read_csv(path)
     valid_indices = _load_valid_indices(path.replace('.csv', '_valid.txt'))
-    dataset = TetrioDataset(df, CONFIG, T_CONFIG, valid_indices)
+    dataset = TetrioDataset(df, CONFIG, T_CONFIG, valid_indices, augment)
     return DataLoader(dataset, batch_size=CONFIG.batch_size, shuffle=True)
 
 def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
@@ -37,7 +38,7 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         Tuple: A tuple containing the training and testing data (x_train, x_test, y_train, y_test).
     """
     # ============== Load data ============== 
-    train_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_train)
+    train_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_train, augment=True)
     test_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_test)
     val_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_val)
 
@@ -51,11 +52,12 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
 
 class TetrioDataset(Dataset):
     def __init__(self, df: pd.DataFrame, CONFIG: Configuration, T_CONFIG: TetrisConfiguration,
-                 valid_indices: list[int] | None = None):
+                 valid_indices: list[int] | None = None, augment: bool = False):
         self.df = df
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
         self._indices = valid_indices if valid_indices is not None else list(range(len(df)))
+        self.augment = augment
 
     def __len__(self):
         return len(self._indices)
@@ -64,19 +66,22 @@ class TetrioDataset(Dataset):
         row_idx = self._indices[idx]
         row = self.df.iloc[row_idx]
 
-        if np.random.rand() < self.CONFIG.aug_prob:
+        if self.augment and np.random.rand() < self.CONFIG.aug_prob:
             row = flip_rows(row, self.T_CONFIG.board_w)
+
+        reference = row['playfield_next']
+        if row['cleared'] == 0:
+            reference = reference[int(row['immediate_garbage']) * self.T_CONFIG.board_w:]
 
         pf_rows = (len(row['playfield']) + self.T_CONFIG.board_w - 1) // self.T_CONFIG.board_w
         game_h = max(self.T_CONFIG.board_h, pf_rows)
-
         game = Tetris(
             playfield=row['playfield'],
             next_pieces=row['next'],
-            active_piece=row['placed'],
-            hold_piece=row['hold'],
-            vanish_zone=self.T_CONFIG.vanish_zone,
+            active_piece=row['real_current'].translate(J_L_SWAP),
+            hold_piece=row['real_hold'].translate(J_L_SWAP),
             height=game_h,
+            vanish_zone=self.T_CONFIG.vanish_zone,
         )
 
         searcher = MoveSearcher(game, self.CONFIG, self.T_CONFIG)
@@ -88,8 +93,9 @@ class TetrioDataset(Dataset):
         ]
         placements, features = searcher.get_all_features(game_state)
 
-        board = Board(game.width, game_h, game.vanish_zone, game.color_map,
-                      row['playfield_next'][int(row['immediate_garbage'])*10:])
+        board = Board(
+            game.width, game.height, game.vanish_zone, game.color_map, reference
+        )
         target = find_board_index(board, features['boards'])
 
         assert target != -1, f"Board not found in placements for row {row_idx}, {target=}. Run validation to generate valid_indices."
@@ -223,7 +229,10 @@ def flip_rows(row, width: int = 10):
     row = row.copy()
 
     def _flip_field(pf: str) -> str:
-        return ''.join(pf[i:i + width][::-1] for i in range(0, len(pf), width))
+        return ''.join(
+            pf[i:i + width].ljust(width, 'N')[::-1]
+            for i in range(0, len(pf), width)
+        )
 
     def _flip_piece(piece: str) -> str:
         piece = PieceEnum[piece]
@@ -231,6 +240,7 @@ def flip_rows(row, width: int = 10):
 
     row['playfield'] = _flip_field(row['playfield'])
     row['playfield_next'] = _flip_field(row['playfield_next'])
+
 
     for field in ('real_current', 'placed', 'real_hold', 'hold'):
         row[field] = _flip_piece(row[field])
