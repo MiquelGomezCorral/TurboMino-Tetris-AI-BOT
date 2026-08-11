@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 from maikol_utils.print_utils import print_separator
 from maikol_utils.file_utils import make_dirs
 
-from src.data import load_tetrio_data
+from src.data import load_precomputed_tetrio_data
 from src.models import TurboMinoModule, TetrisEnv
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
@@ -24,7 +24,7 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
     CONFIG.print_config()
     T_CONFIG.print_config()
 
-    train_loader, _, val_loader = load_tetrio_data(CONFIG, T_CONFIG)
+    train_loader, _, val_loader = load_precomputed_tetrio_data(CONFIG)
 
     print(" - Loading Environment")
     observation_space = TetrisEnv(CONFIG, T_CONFIG).observation_space

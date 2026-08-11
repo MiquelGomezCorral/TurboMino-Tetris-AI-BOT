@@ -7,7 +7,7 @@ from maikol_utils.print_utils import print_separator
 
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
-from scripts import showcase_model, play_tetris_game
+from scripts import process_tetrio_data, showcase_model, play_tetris_game
 from src.models import train_ppo_turbomino, train_tetrio_turbomino
 
 def cmd_play_tetris(args: argparse.Namespace):
@@ -35,6 +35,13 @@ def cmd_train_tetrio(args):
     T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
     train_tetrio_turbomino(CONFIG, T_CONFIG)
     print_separator("END TRAINING TETRIO", sep_type="START")
+
+def cmd_precompute_tetrio(args):
+    print_separator("START PRECOMPUTING TETRIO", sep_type="START")
+    CONFIG: Configuration = args_to_dataclass(args, Configuration)
+    T_CONFIG: TetrisConfiguration = args_to_dataclass(args, TetrisConfiguration)
+    process_tetrio_data(CONFIG, T_CONFIG)
+    print_separator("END PRECOMPUTING TETRIO", sep_type="START")
 
 def cmd_showcase(args):
     """Call showcase functions."""
@@ -80,6 +87,12 @@ if __name__ == "__main__":
     # ======================================================================================
     p_train = subparsers.add_parser("train-tetrio", help="Train the Tetrio model")
     p_train.set_defaults(func=cmd_train_tetrio)
+
+    # ======================================================================================
+    #                                       precompute_tetrio
+    # ======================================================================================
+    p_precompute = subparsers.add_parser("precompute-tetrio", help="Process and precompute Tetrio data")
+    p_precompute.set_defaults(func=cmd_precompute_tetrio)
 
 
     # ======================================================================================

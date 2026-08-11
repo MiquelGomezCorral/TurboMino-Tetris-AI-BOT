@@ -206,6 +206,7 @@ class TetrioDataTests(unittest.TestCase):
             dataset = PrecomputedTetrioDataset(
                 data_dir,
                 SimpleNamespace(max_placements=3, aug_prob=1),
+                augment=True,
             )
 
             obs, target = dataset[0]

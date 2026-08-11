@@ -32,6 +32,10 @@ class Configuration:
     tetrio_train: str = os.path.join(DATA_PATH, "tetrio_train.csv")
     tetrio_test: str = os.path.join(DATA_PATH, "tetrio_test.csv")
     tetrio_val: str = os.path.join(DATA_PATH, "tetrio_val.csv")
+    precomputed_data: str = os.path.join(DATA_PATH, "precomputed")
+    precomputed_train: str = os.path.join(precomputed_data, "train")
+    precomputed_val: str = os.path.join(precomputed_data, "val")
+    precomputed_test: str = os.path.join(precomputed_data, "test")
 
     pretrain_model_path: str = os.path.join(MODELS_PATH, "pretrain_model")
     checkpoint_dir: str = os.path.join(MODELS_PATH, "checkpoints", exp_name)

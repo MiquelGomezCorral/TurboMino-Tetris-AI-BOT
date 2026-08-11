@@ -14,18 +14,10 @@ MIRRORED_PIECE_INDICES = np.array([
 ])
 J_L_SWAP = str.maketrans("JL", "LJ")
 
-def _load_valid_indices(path: str) -> list[int] | None:
-    if os.path.exists(path):
-        with open(path) as f:
-            return [int(line.strip()) for line in f if line.strip()]
-    return None
-
-
 def load_tetrio_loader(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, path: str, augment: bool = False):
     print(f" - Loading Tetrio data from {path}...")
     df = pd.read_csv(path)
-    valid_indices = _load_valid_indices(path.replace('.csv', '_valid.txt'))
-    dataset = TetrioDataset(df, CONFIG, T_CONFIG, valid_indices, augment)
+    dataset = TetrioDataset(df, CONFIG, T_CONFIG, augment=augment)
     return DataLoader(dataset, batch_size=CONFIG.batch_size, shuffle=True)
 
 def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
@@ -52,19 +44,17 @@ def load_tetrio_data(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
 
 class TetrioDataset(Dataset):
     def __init__(self, df: pd.DataFrame, CONFIG: Configuration, T_CONFIG: TetrisConfiguration,
-                 valid_indices: list[int] | None = None, augment: bool = False):
+                 augment: bool = False):
         self.df = df
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
-        self._indices = valid_indices if valid_indices is not None else list(range(len(df)))
         self.augment = augment
 
     def __len__(self):
-        return len(self._indices)
+        return len(self.df)
 
     def __getitem__(self, idx):
-        row_idx = self._indices[idx]
-        row = self.df.iloc[row_idx]
+        row = self.df.iloc[idx]
 
         if self.augment and np.random.rand() < self.CONFIG.aug_prob:
             row = flip_rows(row, self.T_CONFIG.board_w)
@@ -92,16 +82,16 @@ class TetrioDataset(Dataset):
             float(row['incoming_garbage']),
         ]
         placements, features = searcher.get_all_features(game_state)
+        M_actual = len(placements)
 
         board = Board(
             game.width, game.height, game.vanish_zone, game.color_map, reference
         )
-        target = find_board_index(board, features['boards'])
+        target = find_board_index(board, features['boards'][:M_actual])
 
-        assert target != -1, f"Board not found in placements for row {row_idx}, {target=}. Run validation to generate valid_indices."
+        assert target != -1, f"Board not found in placements for row {idx}, {target=}."
 
         # Pad all variable-length tensors to max_placements
-        M_actual = len(placements)
         M_max    = self.CONFIG.max_placements
 
         def pad_first_dim(arr, max_len, pad_value=0.0):
@@ -163,9 +153,10 @@ def find_board_index(board: Board, boards_batch: np.ndarray) -> int:
 # ========================================================
 
 class PrecomputedTetrioDataset(Dataset):
-    def __init__(self, data_dir: str, CONFIG: Configuration):
+    def __init__(self, data_dir: str, CONFIG: Configuration, augment: bool = False):
         self.data_dir = data_dir
         self.CONFIG = CONFIG
+        self.augment = augment
         self.paths = sorted(glob.glob(os.path.join(data_dir, '*', '*.npz')))
 
     def __len__(self):
@@ -180,7 +171,7 @@ class PrecomputedTetrioDataset(Dataset):
         game_state = data['game_state']   # (G,)
         target     = int(data['target'])
 
-        if np.random.rand() < self.CONFIG.aug_prob:
+        if self.augment and np.random.rand() < self.CONFIG.aug_prob:
             boards = boards[..., ::-1].copy()
             queues = queues[..., MIRRORED_PIECE_INDICES]
 
@@ -210,11 +201,11 @@ class PrecomputedTetrioDataset(Dataset):
 
 def load_precomputed_tetrio_data(CONFIG: Configuration):
     print(' - Loading precomputed Tetrio train...')
-    train_dataset = PrecomputedTetrioDataset('data/precomputed/train', CONFIG)
+    train_dataset = PrecomputedTetrioDataset(CONFIG.precomputed_train, CONFIG, augment=True)
     print(' - Loading precomputed Tetrio test...')
-    test_dataset  = PrecomputedTetrioDataset('data/precomputed/test', CONFIG)
+    test_dataset  = PrecomputedTetrioDataset(CONFIG.precomputed_test, CONFIG)
     print(' - Loading precomputed Tetrio val...')
-    val_dataset   = PrecomputedTetrioDataset('data/precomputed/val', CONFIG)
+    val_dataset   = PrecomputedTetrioDataset(CONFIG.precomputed_val, CONFIG)
 
     train_loader = DataLoader(train_dataset, batch_size=CONFIG.batch_size, shuffle=True)
     test_loader  = DataLoader(test_dataset,  batch_size=CONFIG.batch_size, shuffle=False)

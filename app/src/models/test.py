@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 
 from maikol_utils.print_utils import print_separator
 
-from src.data import load_tetrio_loader
+from src.data import load_precomputed_tetrio_data
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from stable_baselines3.common.utils import obs_as_tensor
@@ -93,7 +93,7 @@ def test_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
 def test_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, model=None):
     pl.seed_everything(CONFIG.seed, workers=True)
 
-    test_loader = load_tetrio_loader(CONFIG, T_CONFIG, CONFIG.tetrio_test)
+    _, test_loader, _ = load_precomputed_tetrio_data(CONFIG)
 
     if isinstance(model, pl.LightningModule):
         trainer = pl.Trainer(deterministic="warn")
