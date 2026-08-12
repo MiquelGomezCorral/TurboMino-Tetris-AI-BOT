@@ -2,6 +2,7 @@ import copy
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 
 import numpy as np
@@ -49,6 +50,7 @@ class ConfigurationTests(unittest.TestCase):
         )
 
         self.assertEqual(config.n_epochs, 10)
+        self.assertEqual(config.tetrio_epochs, 100)
         self.assertEqual(config.rollout_steps(), 834)
         self.assertEqual(config.eval_steps(), 3_336)
 
@@ -153,6 +155,38 @@ class BoardEncoderTests(unittest.TestCase):
         module = TurboMinoModule(config, tetris_config, observation_space).eval()
         logits = module(observations)
         self.assertTrue(torch.all(logits[:, 1:3] == TurboMinoEncoder.MASK_VALUE))
+
+
+class TurboMinoModuleTests(unittest.TestCase):
+    def test_validation_logs_top_k_accuracies(self):
+        config = Configuration(
+            max_placements=4,
+            max_board_size_h=8,
+            max_board_size_w=4,
+            d_model=8,
+            n_heads=2,
+            head_hidden=8,
+            channels=2,
+            wide_k=1,
+            features_per_placement=2,
+        )
+        tetris_config = TetrisConfiguration(board_w=4, board_h=8, vanish_zone=0)
+        observation_space = TetrisEnv(config, tetris_config).observation_space
+        module = TurboMinoModule(config, tetris_config, observation_space)
+        module.forward = lambda _: torch.tensor([[4.0, 3.0, 2.0, 1.0], [4.0, 3.0, 2.0, 1.0]])
+
+        with patch.object(module, "log") as log:
+            module._shared_step(({}, torch.tensor([0, 3])), "val")
+
+        metrics = {call.args[0]: call.args[1].item() for call in log.call_args_list}
+        self.assertEqual(set(metrics), {
+            "val/loss", "val/acc_top1", "val/acc_top3", "val/acc_top5", "val/acc_top10",
+        })
+        self.assertEqual(metrics["val/acc_top1"], 0.5)
+        self.assertEqual(metrics["val/acc_top3"], 0.5)
+        self.assertEqual(metrics["val/acc_top5"], 1.0)
+        self.assertEqual(metrics["val/acc_top10"], 1.0)
+        self.assertTrue(all(call.kwargs["prog_bar"] for call in log.call_args_list))
 
 
 class ResumeStateTests(unittest.TestCase):

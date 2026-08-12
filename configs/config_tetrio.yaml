@@ -1,0 +1,20 @@
+exp_name: "config_tetrio"
+seed: 42
+
+# --- Data and training ---
+batch_size: 156
+num_workers: 12
+tetrio_epochs: 100
+patience: 10
+label_smoothing: 0.1
+
+# --- Model ---
+features_per_placement: 1
+wide_k: 4
+channels: 32
+
+# --- Optimizer / scheduler ---
+learning_rate: 0.0001
+weight_decay: 0.0001
+eta_min: 0.00001
+clear_lines_on_placement: true

@@ -104,8 +104,10 @@ class BoardEncoder(nn.Module):
         self.conv_1 = nn.Sequential(nn.Conv2d(ch*k, ch*k, 3, padding='same'), nn.GELU())
         self.conv_2 = nn.Sequential(nn.Conv2d(ch*k, ch*k, 3, padding='same'), nn.GELU())
         self.pool = nn.MaxPool2d(2)
+        output_shape = (max(1, height // 8), max(1, width // 8))
+        self.output_pool = nn.AdaptiveMaxPool2d(output_shape)
 
-        flat_dim = k * ch * (height // 4) * (width // 4)
+        flat_dim = k * ch * output_shape[0] * output_shape[1]
         self.proj = nn.Linear(flat_dim, d_model)
 
     def forward(self, boards, valid_mask=None):  # (B, M, H, W) -> (B, M, d_model)
@@ -116,8 +118,9 @@ class BoardEncoder(nn.Module):
             if not valid_mask.any():
                 return x.new_zeros((b, m, self.proj.out_features))
             x = x[valid_mask]
-        x = self.pool(self.conv_1(self.res_1(self.stem(x))))
-        x = self.pool(self.conv_2(self.res_2(x)))
+        x = self.pool(self.stem(x))
+        x = self.pool(self.conv_1(self.res_1(x)))
+        x = self.output_pool(self.conv_2(self.res_2(x)))
         x = rearrange(x, "bm c h w -> bm (c h w)")
         x = self.proj(x)
         if valid_mask is not None:
@@ -398,17 +401,18 @@ class TurboMinoModule(pl.LightningModule):
         logits = self(observations)     # (B, M)
         loss = self.criterion(logits, targets)
 
-        preds = torch.argmax(logits, dim=1)
-        acc = (preds == targets).float().mean()
+        top_matches = logits.topk(min(10, logits.shape[1]), dim=1).indices == targets.unsqueeze(1)
+        top1, top3, top5, top10 = [
+            top_matches[:, :min(k, logits.shape[1])].any(dim=1).float().mean()
+            for k in (1, 3, 5, 10)
+        ]
+        show_on_bar = stage == "val"
 
-        # Top-3 acc is useful when M=128 — exact match is hard
-        top3 = (
-            logits.topk(3, dim=1).indices == targets.unsqueeze(1)
-        ).any(dim=1).float().mean()
-
-        self.log(f"{stage}/loss",     loss,  prog_bar=True,  on_epoch=True, on_step=False)
-        self.log(f"{stage}/acc_top1", acc,   prog_bar=True,  on_epoch=True, on_step=False)
-        self.log(f"{stage}/acc_top3", top3,  prog_bar=False, on_epoch=True, on_step=False)
+        self.log(f"{stage}/loss", loss, prog_bar=show_on_bar, on_epoch=True, on_step=False)
+        self.log(f"{stage}/acc_top1", top1, prog_bar=show_on_bar, on_epoch=True, on_step=False)
+        self.log(f"{stage}/acc_top3", top3, prog_bar=show_on_bar, on_epoch=True, on_step=False)
+        self.log(f"{stage}/acc_top5", top5, prog_bar=show_on_bar, on_epoch=True, on_step=False)
+        self.log(f"{stage}/acc_top10", top10, prog_bar=show_on_bar, on_epoch=True, on_step=False)
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -435,7 +439,7 @@ class TurboMinoModule(pl.LightningModule):
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer,
-            T_0=self.CONFIG.epochs,
+            T_0=self.CONFIG.tetrio_epochs,
             eta_min=self.CONFIG.eta_min,
         )
         return {

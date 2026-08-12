@@ -1,33 +1,18 @@
 exp_name: "basic_tetrio"
 seed: 42
 
-features_per_placement: 4
+features_per_placement: 1
 
 learning_rate: 0.0001
-epochs: 100
+tetrio_epochs: 100
 patience: 10
 label_smoothing: 0.1
 weight_decay: 0.0001
 eta_min: 0.00001
-batch_size: 256
-num_workers: 4
+batch_size: 192
+num_workers: 12
 
-#-----------------------------------------------------------------
-net_arch:  [128]
-learning_rate: 0.0001
-clip_range: 0.1
-rollout_samples: 25000
-batch_size: 256
-n_epochs: 10
-ent_coef: 0.005
-gamma: 0.99
-n_envs: 4
-verbose: 0
-
-eval_every_rollouts: 4
-eval_episodes: 100
-max_eval_pieces: 1000
-curriculum_learned_ratio: 0.5
-total_timesteps: 5000000
+wide_k: 2
+channels: 24
 
 clear_lines_on_placement: true

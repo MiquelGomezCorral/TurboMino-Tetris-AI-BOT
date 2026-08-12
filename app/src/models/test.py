@@ -4,6 +4,7 @@ from multiprocessing import get_context
 import numpy as np
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import TQDMProgressBar
 
 from maikol_utils.print_utils import print_separator
 
@@ -96,13 +97,16 @@ def test_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, model=None
     _, test_loader, _ = load_precomputed_tetrio_data(CONFIG)
 
     if isinstance(model, pl.LightningModule):
-        trainer = pl.Trainer(deterministic="warn")
+        trainer = pl.Trainer(
+            callbacks=[TQDMProgressBar(refresh_rate=1)],
+            deterministic="warn",
+        )
         results = trainer.test(model=model, dataloaders=test_loader)
         return results
 
     # --- sb3 MaskablePPO path ---
     correct_top1 = 0
-    correct_top3 = 0
+    correct_top10 = 0
     total = 0
 
     for obs, target in tqdm(test_loader, desc="Testing"):
@@ -120,14 +124,14 @@ def test_tetrio(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, model=None
             mask_tensor = torch.tensor(action_masks_np, device=model.policy.device)
             distribution.apply_masking(mask_tensor)
             logits = distribution.distribution.logits
-            top3 = logits.topk(3, dim=1).indices == target.to(model.policy.device).unsqueeze(1)
-            correct_top3 += top3.any(dim=1).sum().item()
+            top10 = logits.topk(10, dim=1).indices == target.to(model.policy.device).unsqueeze(1)
+            correct_top10 += top10.any(dim=1).sum().item()
         except Exception:
-            correct_top3 = correct_top1
+            correct_top10 = correct_top1
 
     acc_top1 = correct_top1 / total
-    acc_top3 = correct_top3 / total
-    return [{'test/acc_top1': acc_top1, 'test/acc_top3': acc_top3}]
+    acc_top10 = correct_top10 / total
+    return [{'test/acc_top1': acc_top1, 'test/acc_top10': acc_top10}]
 
 
 def test_on_game(

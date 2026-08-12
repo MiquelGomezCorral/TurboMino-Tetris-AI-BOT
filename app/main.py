@@ -86,6 +86,7 @@ if __name__ == "__main__":
     #                                       train_tetrio
     # ======================================================================================
     p_train = subparsers.add_parser("train-tetrio", help="Train the Tetrio model")
+    p_train.add_argument("-MP", "--resume_model_path", type=str, default=None, help="Lightning .ckpt checkpoint to resume (default: fresh training)")
     p_train.set_defaults(func=cmd_train_tetrio)
 
     # ======================================================================================

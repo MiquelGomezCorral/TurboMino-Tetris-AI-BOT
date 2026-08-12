@@ -6,11 +6,10 @@ import sys
 import time
 
 import pygame
-from sb3_contrib import MaskablePPO
 
 from maikol_utils.print_utils import print_separator
 
-from src.models import TetrisEnv
+from src.models import TetrisEnv, load_model
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from src.tetris.visualization import render_game
@@ -40,7 +39,7 @@ def _run_agent(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, on_frame, d
 
     print(f"[*] Loading model from {CONFIG.model_path}...")
     env = TetrisEnv(CONFIG, T_CONFIG, color_map=True)
-    model = MaskablePPO.load(CONFIG.model_path)
+    model = load_model(CONFIG, T_CONFIG, env=env, model_path=CONFIG.model_path)
 
     obs, _ = env.reset()
     done = False

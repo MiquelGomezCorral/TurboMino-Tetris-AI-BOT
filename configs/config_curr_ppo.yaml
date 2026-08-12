@@ -7,7 +7,7 @@ features_per_placement: 1
 learning_rate: 0.0002
 clip_range: 0.1
 rollout_samples: 73728
-batch_size: 96
+batch_size: 256
 n_epochs: 10
 ent_coef: 0.005
 gamma: 0.9995

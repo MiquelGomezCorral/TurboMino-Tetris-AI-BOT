@@ -56,7 +56,7 @@ class Configuration:
     n_epochs: int = 10
     num_workers: int = 4
 
-    epochs: int = 100
+    tetrio_epochs: int = 100
     patience: int = 10
     label_smoothing: float = 0.1
 
@@ -150,6 +150,8 @@ class Configuration:
             raise ValueError("eval_episodes must be at least 1")
         if self.n_epochs < 1:
             raise ValueError("n_epochs must be at least 1")
+        if self.tetrio_epochs < 1:
+            raise ValueError("tetrio_epochs must be at least 1")
         if self.eval_every_rollouts < 1:
             raise ValueError("eval_every_rollouts must be at least 1")
         if self.random_width:

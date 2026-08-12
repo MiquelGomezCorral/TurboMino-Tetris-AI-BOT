@@ -207,9 +207,13 @@ def load_precomputed_tetrio_data(CONFIG: Configuration):
     print(' - Loading precomputed Tetrio val...')
     val_dataset   = PrecomputedTetrioDataset(CONFIG.precomputed_val, CONFIG)
 
-    train_loader = DataLoader(train_dataset, batch_size=CONFIG.batch_size, shuffle=True)
-    test_loader  = DataLoader(test_dataset,  batch_size=CONFIG.batch_size, shuffle=False)
-    val_loader   = DataLoader(val_dataset,   batch_size=CONFIG.batch_size, shuffle=False)
+    loader_kwargs = {
+        "batch_size": CONFIG.batch_size,
+        "num_workers": CONFIG.num_workers,
+    }
+    train_loader = DataLoader(train_dataset, shuffle=True, **loader_kwargs)
+    test_loader  = DataLoader(test_dataset, shuffle=False, **loader_kwargs)
+    val_loader   = DataLoader(val_dataset, shuffle=False, **loader_kwargs)
 
     return train_loader, test_loader, val_loader
 
