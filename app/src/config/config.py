@@ -114,9 +114,19 @@ class Configuration:
     death_penalty: float = -5.0
     heuristic_reward_scale: float = 0.01
     heuristic_reward_cap: float = 0.1
-    line_clear_reward: float = 0.1
-    all_clear_reward: float = 0.4
-    t_spin_reward: float = 0.2
+    line_clear_rewards: dict[int, float] = field(default_factory=lambda: {
+        1: 1.0,
+        2: 2.0,
+        3: 3.0,
+        4: 6.0,
+    })
+    t_spin_rewards: dict[int, float] = field(default_factory=lambda: {
+        1: 2.0,
+        2: 6.0,
+        3: 9.0,
+    })
+    all_clear_reward: float = 20.0
+    combo_reward_multiplier: float = 1.25
 
     garbage_prob: float = 0.13
     garbage_delay: int = 5

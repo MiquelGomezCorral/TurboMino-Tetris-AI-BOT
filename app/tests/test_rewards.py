@@ -51,12 +51,35 @@ class RewardTests(unittest.TestCase):
         config = Configuration()
         config.use_survival_rewards = False
         config.use_game_rewards = True
-        game = FakeGame(False, PlacementEvent(4, True, True))
+        game = FakeGame(False, PlacementEvent(4, True, False))
+        game.score_system = SimpleNamespace(combo=1)
 
         _, reward, terminated, _, _ = self.make_env(config, game).step(0)
 
         self.assertFalse(terminated)
-        self.assertAlmostEqual(reward, 1.0)
+        self.assertAlmostEqual(reward, 26.0)
+
+    def test_game_reward_adds_clear_and_combo_rewards(self):
+        config = Configuration()
+        config.use_survival_rewards = False
+        config.use_game_rewards = True
+        game = FakeGame(False, PlacementEvent(2, False, False))
+        game.score_system = SimpleNamespace(combo=3)
+
+        _, reward, _, _, _ = self.make_env(config, game).step(0)
+
+        self.assertAlmostEqual(reward, 2.0 * 1.25 ** 2)
+
+    def test_game_reward_uses_t_spin_table(self):
+        config = Configuration()
+        config.use_survival_rewards = False
+        config.use_game_rewards = True
+        game = FakeGame(False, PlacementEvent(3, False, True))
+        game.score_system = SimpleNamespace(combo=1)
+
+        _, reward, _, _, _ = self.make_env(config, game).step(0)
+
+        self.assertAlmostEqual(reward, 9.0)
 
     def test_terminal_reward_excludes_game_and_heuristic_rewards(self):
         config = Configuration()

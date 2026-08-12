@@ -25,6 +25,15 @@ class ScoringSystem:
         self.last_placement_event = PlacementEvent(0, False, False)
         self.total_all_clears = 0
         self.total_tetrises = 0
+        self.total_t_spins = {
+            "T-Spin": 0,
+            "T-Spin Single": 0,
+            "T-Spin Double": 0,
+            "T-Spin Triple": 0,
+            "T-Spin Mini": 0,
+            "T-Spin Mini Single": 0,
+            "T-Spin Mini Double": 0,
+        }
 
     def _compute_move_name(self, lines: int, spin: SpinType, perfect_clear: bool) -> str:
         parts = []
@@ -59,6 +68,8 @@ class ScoringSystem:
         )
         self.score += drop_distance * (2 if hard_drop else 1)
         self.last_move_name = self._compute_move_name(lines, spin, perfect_clear)
+        if spin != SpinType.NONE:
+            self.total_t_spins[self._compute_move_name(lines, spin, False)] += 1
 
         if lines == 0:
             # if spin != SpinType.NONE:

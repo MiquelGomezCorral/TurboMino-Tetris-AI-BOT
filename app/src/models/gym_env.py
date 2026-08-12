@@ -89,11 +89,13 @@ class TetrisEnv(gym.Env):
 
             if self.CONFIG.use_game_rewards:
                 event = self.game.get_last_placement_event()
-                reward += event.lines_cleared * self.CONFIG.line_clear_reward
+                if event.regular_t_spin:
+                    game_reward = self.CONFIG.t_spin_rewards.get(event.lines_cleared, 0.0)
+                else:
+                    game_reward = self.CONFIG.line_clear_rewards.get(event.lines_cleared, 0.0)
+                reward += game_reward * self.CONFIG.combo_reward_multiplier ** max(0, self.game.score_system.combo - 1)
                 if event.all_clear:
                     reward += self.CONFIG.all_clear_reward
-                if event.regular_t_spin:
-                    reward += self.CONFIG.t_spin_reward
 
             if self.CONFIG.use_heuristic_rewards:
                 self._heuristic_score = self.evaluator.evaluate(self.game.board).compute_total()

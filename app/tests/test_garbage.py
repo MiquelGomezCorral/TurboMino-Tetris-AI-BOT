@@ -95,6 +95,14 @@ class GarbageTests(unittest.TestCase):
         for expected in (2, 3, 4, 5):
             self.assertEqual(spins.evaluate_drop(1, SpinType.REGULAR, False, 0, True), expected)
 
+        spin_counts = ScoringSystem()
+        for lines, name in ((0, "T-Spin"), (1, "T-Spin Single"), (2, "T-Spin Double"), (3, "T-Spin Triple")):
+            spin_counts.evaluate_drop(lines, SpinType.REGULAR, False, 0, True)
+            self.assertEqual(spin_counts.total_t_spins[name], 1)
+        for lines, name in ((0, "T-Spin Mini"), (1, "T-Spin Mini Single"), (2, "T-Spin Mini Double")):
+            spin_counts.evaluate_drop(lines, SpinType.MINI, False, 0, True)
+            self.assertEqual(spin_counts.total_t_spins[name], 1)
+
         perfect_clear = ScoringSystem()
         self.assertEqual(perfect_clear.evaluate_drop(1, SpinType.NONE, True, 0, True), 5)
         self.assertEqual(perfect_clear.get_b2b_streak(), 1)

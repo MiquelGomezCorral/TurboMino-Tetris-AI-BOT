@@ -52,9 +52,17 @@ death_penalty: -5.0
 
 heuristic_reward_scale: 0.01
 heuristic_reward_cap: 0.1
-line_clear_reward: 0.1
-t_spin_reward: 0.2
-all_clear_reward: 0.8
+line_clear_rewards:
+  1: 1.0
+  2: 2.0
+  3: 3.0
+  4: 6.0
+t_spin_rewards:
+  1: 2.0
+  2: 6.0
+  3: 9.0
+all_clear_reward: 20.0
+combo_reward_multiplier: 1.25
 
 # CAMBIAR QUITAR UNA RESIDUAL
 # CAMBIAR METER EL PIECES TO BOARD ATTENTION

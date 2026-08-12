@@ -70,6 +70,8 @@ def _print_final_stats(game, pieces_placed, max_combo):
     print(f"- Pieces Placed: {pieces_placed}")
     print(f"- Max Combo: {max_combo if max_combo > 0 else '---':<5}")
     print(f"- Total All Clears: {game.score_system.total_all_clears: <5}")
+    for spin_name, count in game.score_system.total_t_spins.items():
+        print(f"- {spin_name}: {count:<5}")
 
 
 def play_agent_terminal(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
