@@ -2,6 +2,7 @@ import os
 
 import pytorch_lightning as pl
 import torch
+from lightning_fabric.plugins.io import TorchCheckpointIO
 from pytorch_lightning.callbacks import TQDMProgressBar
 
 from maikol_utils.print_utils import print_separator
@@ -12,6 +13,11 @@ from src.models import TurboMinoModule, TetrisEnv
 from src.config import Configuration
 from src.tetris import TetrisConfiguration
 from .test import test_model
+
+
+class TrustedCheckpointIO(TorchCheckpointIO):
+    def load_checkpoint(self, path, map_location=lambda storage, loc: storage, weights_only=None):
+        return super().load_checkpoint(path, map_location=map_location, weights_only=False)
 
 
 def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
@@ -54,7 +60,8 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
         save_last=True,
         save_weights_only=False,
         every_n_epochs=1,
-        filename=f"pretrain-{CONFIG.exp_name}-epoch{{epoch:02d}}",
+        filename=f"pretrain-{CONFIG.exp_name}-epoch={{epoch:02d}}",
+        auto_insert_metric_name=False,
         dirpath=checkpoint_dir,
     )
     best_checkpoint = pl.callbacks.ModelCheckpoint(
@@ -63,6 +70,7 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
         save_top_k=1,
         save_weights_only=False,
         filename=f"pretrain-{CONFIG.exp_name}-best",
+        auto_insert_metric_name=False,
         dirpath=checkpoint_dir,
     )
     callbacks = [
@@ -78,6 +86,7 @@ def train_tetrio_turbomino(CONFIG: Configuration, T_CONFIG: TetrisConfiguration)
         max_epochs=CONFIG.tetrio_epochs, callbacks=callbacks, logger=logger,
         check_val_every_n_epoch=1, log_every_n_steps=1, deterministic="warn",
         precision="bf16-mixed",
+        plugins=TrustedCheckpointIO(),
     )
     trainer.fit(
         model=model,

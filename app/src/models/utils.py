@@ -124,9 +124,7 @@ def load_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, env=None, l
         from .TurboMino import TurboMinoModule
         model = TurboMinoModule.load_from_checkpoint(
             model_path,
-            CONFIG=CONFIG, 
-            T_CONFIG=T_CONFIG, 
-            observation_space=env.observation_space
+            weights_only=False,
         )
 
     else:
