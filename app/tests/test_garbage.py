@@ -102,6 +102,7 @@ class GarbageTests(unittest.TestCase):
         for lines, name in ((0, "T-Spin Mini"), (1, "T-Spin Mini Single"), (2, "T-Spin Mini Double")):
             spin_counts.evaluate_drop(lines, SpinType.MINI, False, 0, True)
             self.assertEqual(spin_counts.total_t_spins[name], 1)
+        self.assertEqual(spin_counts.total_placements, 7)
 
         perfect_clear = ScoringSystem()
         self.assertEqual(perfect_clear.evaluate_drop(1, SpinType.NONE, True, 0, True), 5)

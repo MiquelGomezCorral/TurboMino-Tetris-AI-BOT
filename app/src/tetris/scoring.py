@@ -23,6 +23,7 @@ class ScoringSystem:
         self.b2b_streak = 0
         self.last_move_name = ""
         self.last_placement_event = PlacementEvent(0, False, False)
+        self.total_placements = 0
         self.total_all_clears = 0
         self.total_tetrises = 0
         self.total_t_spins = {
@@ -56,6 +57,7 @@ class ScoringSystem:
         return " ".join(parts)
 
     def evaluate_drop(self, lines: int, spin: SpinType, perfect_clear: bool, drop_distance: int, hard_drop: bool):
+        self.total_placements += 1
         tpin_attacks = {
             SpinType.REGULAR: {0: 0, 1: 2, 2: 4, 3: 6},
             SpinType.MINI: {0: 0, 1: 0, 2: 1},

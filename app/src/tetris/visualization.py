@@ -126,6 +126,21 @@ def render_game(CONFIG: TetrisConfiguration, surface, game, show_ghost: bool = T
     draw_text(CONFIG, surface, f"B2B active {'ON' if ss.get_b2b_active() else 'OFF'}", CONFIG.hold_offset_x, 8)
     draw_text(CONFIG, surface, f'Move: {ss.last_move_name if ss.last_move_name else "---"}', CONFIG.hold_offset_x, 9)
 
+    live_totals = (
+        ("Moves", ss.total_placements),
+        ("Tetrises", ss.total_tetrises),
+        ("All Clears", ss.total_all_clears),
+        ("T-Spin", ss.total_t_spins["T-Spin"]),
+        ("TS Single", ss.total_t_spins["T-Spin Single"]),
+        ("TS Double", ss.total_t_spins["T-Spin Double"]),
+        ("TS Triple", ss.total_t_spins["T-Spin Triple"]),
+        ("Mini", ss.total_t_spins["T-Spin Mini"]),
+        ("Mini Single", ss.total_t_spins["T-Spin Mini Single"]),
+        ("Mini Double", ss.total_t_spins["T-Spin Mini Double"]),
+    )
+    for row, (label, count) in enumerate(live_totals, start=11):
+        draw_text(CONFIG, surface, f"{label} {count}", CONFIG.hold_offset_x, row)
+
     # 8. Draw Next Queue (Next 5 pieces)
     next_pieces = game.get_next_pieces()[:5] # Returns list of string names
     for i, piece_name in enumerate(next_pieces):
