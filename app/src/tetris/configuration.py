@@ -26,7 +26,7 @@ class TetrisConfiguration:
     # --- Computed layout (set in __post_init__) ---
     hold_offset_x: int = 1
     board_offset_x: int = 6
-    garbage_bar_offset_x: int = 10
+    garbage_bar_offset_x: int = -1
     next_offset_x: int = 17
     total_height: int = 24
     screen_width: int = 660
@@ -70,7 +70,7 @@ class TetrisConfiguration:
     def __post_init__(self):
         self.hold_offset_x = 1
         self.board_offset_x = self.sidebar_cols + self.gap_cols
-        self.garbage_bar_offset_x = self.board_offset_x - self.gap_cols
+        self.garbage_bar_offset_x += self.board_offset_x - self.gap_cols 
         self.next_offset_x = self.board_offset_x + self.board_w + self.gap_cols
         self.screen_width = (self.next_offset_x + self.sidebar_cols) * self.cell_size
 
