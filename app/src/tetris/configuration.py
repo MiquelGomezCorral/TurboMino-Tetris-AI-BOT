@@ -15,6 +15,7 @@ class TetrisConfiguration:
     max_pieces_on_queue_view: int = 5
     max_pieces_in_view: int = max_pieces_on_queue_view + 2  # + Hold + Active
     num_piece_categories: int = len(PieceEnum) - 1
+    showcase_delay: float = 0.01
 
     # --- Layout constants ---
     sidebar_cols: int = 5

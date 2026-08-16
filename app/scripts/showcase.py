@@ -31,7 +31,7 @@ def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-def _run_agent(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, on_frame, delay: float):
+def _run_agent(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, on_frame):
     """Shared agent driver: loads the model and steps the env, calling on_frame(game, pieces_placed) before each move."""
     if not os.path.exists(CONFIG.model_path):
         print(f"[!] Model not found at {CONFIG.model_path}. Please train the model first.")
@@ -57,7 +57,8 @@ def _run_agent(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, on_frame, d
 
         pieces_placed += 1
         done = terminated or truncated
-        time.sleep(delay)
+        if T_CONFIG.showcase_delay > 0:
+            time.sleep(T_CONFIG.showcase_delay)
 
     return game, pieces_placed, max_combo
 
@@ -86,7 +87,7 @@ def play_agent_terminal(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         print_separator("", sep_type="SHORT")
         game.print_state(include_vanish_zone=True)
 
-    result = _run_agent(CONFIG, T_CONFIG, on_frame, delay=0.01)
+    result = _run_agent(CONFIG, T_CONFIG, on_frame)
     if result is None:
         return
     game, pieces_placed, max_combo = result
@@ -114,7 +115,7 @@ def play_agent_ui(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
         pygame.display.flip()
         clock.tick(60)
 
-    result = _run_agent(CONFIG, T_CONFIG, on_frame, delay=0.05)
+    result = _run_agent(CONFIG, T_CONFIG, on_frame)
     if result is None:
         pygame.quit()
         return

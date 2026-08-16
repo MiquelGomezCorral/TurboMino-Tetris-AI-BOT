@@ -144,6 +144,7 @@ class Configuration:
     
     curriculum: dict = field(default_factory=dict)  # {board_w: timesteps}, e.g. {4: 1_000_000, 6: 1_000_000, 8: 1_000_000, 10: 2_000_000}
     random_width: dict = None
+    
 
     def rollout_steps(self) -> int:
         return max(1, math.ceil(self.rollout_samples / self.n_envs))
