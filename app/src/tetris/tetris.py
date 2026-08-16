@@ -72,9 +72,10 @@ class RotationEnum(enum.IntEnum):
 #                       CLASSES
 # ===================================================================
 class Queue:
-    def __init__(self, initial_pieces: str=None):
+    def __init__(self, initial_pieces: str = None, rng=None):
         # deque is strictly O(1) for appends and pops on both ends
         self._pieces = deque(PieceEnum[c] for c in initial_pieces) if initial_pieces else deque()
+        self.rng = rng if rng is not None else random
         
         # Use standard list, random.shuffle is highly optimized for lists
         self.base_bag = [
@@ -88,7 +89,7 @@ class Queue:
     
     def _add_pieces(self):
         bag = self.base_bag.copy()
-        random.shuffle(bag)
+        self.rng.shuffle(bag)
         self._pieces.extend(bag) # O(k) extending, avoids memory reallocation
 
     def pop_piece(self) -> PieceEnum:
@@ -519,6 +520,8 @@ class Tetris:
         garbage_prob: float = Configuration.garbage_prob,
         garbage_lines_probs: list[float] | tuple[float, ...] = None,
         garbage_cap: int = 8,
+        piece_seed: int = None,
+        garbage_rng=None,
     ):
         if garbage_lines_probs is None:
             garbage_lines_probs = Configuration().garbage_lines_probs
@@ -539,8 +542,10 @@ class Tetris:
         self.garbage_delay = garbage_delay
         self.garbage_probs = tuple(garbage_lines_probs)
         self.garbage_cap = garbage_cap
+        self.garbage_rng = garbage_rng if garbage_rng is not None else random
         self.board = Board(width, height, vanish_zone, color_map, playfield)
-        self.queue = Queue(next_pieces)
+        piece_rng = random.Random(piece_seed) if piece_seed is not None else random
+        self.queue = Queue(next_pieces, rng=piece_rng)
 
         if active_piece:
             self.active_piece = ActivePiece(PieceEnum[active_piece], self.width, self.height)
@@ -554,6 +559,7 @@ class Tetris:
         self.last_kick_index = -1
         self.game_over = False
         self.incoming_garbage = deque()
+        self.last_outgoing_attack = 0
 
     def spawn_piece(self):
         self.active_piece.reset_piece(self.queue.pop_piece())
@@ -580,9 +586,9 @@ class Tetris:
             attack = self.score_system.evaluate_drop(cleared_lines, spin, perfect_clear, drop_distance, hard_drop=True)
 
             overflow = False
-            # ONLY ADD GARBAGE IF THE 'MOVEMENTS ARE DONE'
-            if self.garbage_prob > 0:
-                overflow = self.manage_garbage(cleared_lines, attack)
+            # Process both external and random garbage after the placement.
+            # garbage_prob only controls whether new random packets are created.
+            overflow = self.manage_garbage(cleared_lines, attack)
 
             self.spawn_piece()
             self.game_over = self.game_over or overflow
@@ -615,6 +621,8 @@ class Tetris:
             if lines > cancelled:
                 self.incoming_garbage.appendleft((lines - cancelled, turns, hole))
 
+        self.last_outgoing_attack = max(0, attack)
+
         self.incoming_garbage = deque(
             (lines, max(0, turns - 1), hole)
             for lines, turns, hole in self.incoming_garbage
@@ -639,10 +647,17 @@ class Tetris:
         if self.garbage_prob <= 0:
             return
 
-        if random.random() < self.garbage_prob:
-            lines = random.choices(range(1, 9), weights=self.garbage_probs, k=1)[0]
-            hole = random.randrange(self.width)
-            self.incoming_garbage.append((lines, self.garbage_delay, hole))
+        if self.garbage_rng.random() < self.garbage_prob:
+            lines = self.garbage_rng.choices(range(1, 9), weights=self.garbage_probs, k=1)[0]
+            hole = self.garbage_rng.randrange(self.width)
+            self.queue_garbage(lines, hole)
+
+    def queue_garbage(self, lines: int = 1, hole: int = None):
+        """Queue opponent-sent garbage, independently of random garbage generation."""
+        if lines <= 0:
+            return
+        hole = self.garbage_rng.randrange(self.width) if hole is None else hole
+        self.incoming_garbage.append((lines, self.garbage_delay, hole))
 
     def get_board_state(self, include_vanish_zone=False):
         if include_vanish_zone:

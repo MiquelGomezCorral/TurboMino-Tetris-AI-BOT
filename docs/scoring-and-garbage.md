@@ -46,7 +46,7 @@ Scoring is evaluated only when a piece is hard-dropped and locked. The engine pr
 3. Lock the piece and clear complete lines.
 4. Detect a perfect clear.
 5. Update score, combo, B2B, and attack.
-6. Cancel or insert incoming garbage when garbage simulation is enabled.
+6. Cancel or insert incoming garbage. Random garbage generation is separately controlled by `garbage_prob`.
 7. Spawn the next piece.
 8. End the game if spawning collides or garbage overflow occurred.
 
@@ -289,7 +289,7 @@ Packets are processed in FIFO order.
 
 ### Turn order
 
-After every locked piece, when garbage simulation is enabled:
+After every locked piece:
 
 1. Current attack cancels queued garbage from the front.
 2. Every surviving packet's delay decreases by `1`, with a minimum of `0`.
@@ -306,7 +306,7 @@ Attack cancels incoming lines one-for-one:
 cancelled = min(packet_lines, remaining_attack)
 ```
 
-Partially cancelled packets remain at the front with the same delay and hole. Attack remaining after the queue becomes empty is discarded because this engine does not simulate an opponent receiving outgoing garbage.
+Partially cancelled packets remain at the front with the same delay and hole. Attack remaining after the queue becomes empty is exposed as `last_outgoing_attack`; standalone games have no opponent to receive it, while PvE routes it to the other game.
 
 ### Delay and insertion
 
@@ -341,7 +341,7 @@ The default weighted line-count distribution is:
 
 The hole column is selected uniformly from the board width.
 
-When `garbage_prob <= 0`, the game does not call garbage management. This disables random generation as well as delay, cancellation, and insertion processing.
+When `garbage_prob <= 0`, random packet generation is disabled. Externally queued packets still use delay, cancellation, and insertion processing.
 
 ### Garbage observation values
 

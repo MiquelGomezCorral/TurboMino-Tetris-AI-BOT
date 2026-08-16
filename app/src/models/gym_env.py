@@ -11,12 +11,13 @@ from src.tetris import Tetris, MoveSearcher, TetrisConfiguration, HeuristicEvalu
 from src.config import Configuration
 
 class TetrisEnv(gym.Env):
-    def __init__(self, CONFIG: Configuration, T_CONFIG: TetrisConfiguration, color_map: bool = False):
+    def __init__(self, CONFIG: Configuration, T_CONFIG: TetrisConfiguration, color_map: bool = False, garbage_rng=None):
         super().__init__()
 
         self.CONFIG = CONFIG
         self.T_CONFIG = T_CONFIG
         self.color_map = color_map
+        self.garbage_rng = garbage_rng
 
         assert self.CONFIG.max_board_size_h >= self.T_CONFIG.board_h, "CONFIG.max_board_size_h must be >= T_CONFIG.board_h"
         assert self.CONFIG.max_board_size_w >= self.T_CONFIG.board_w, "CONFIG.max_board_size_w must be >= T_CONFIG.board_w"
@@ -69,6 +70,8 @@ class TetrisEnv(gym.Env):
         if self.CONFIG.use_heuristic_rewards and self._heuristic_score is None:
             self._heuristic_score = self.evaluator.evaluate(self.game.board).compute_total()
         heuristic_before = self._heuristic_score or 0.0
+
+        was_garbage_incoming = len(getattr(self.game, "incoming_garbage", ())) > 0
         for act in chosen_placement['sequence']:
             self.game.move_active_piece(act)
 
@@ -78,33 +81,11 @@ class TetrisEnv(gym.Env):
 
 
         # ===========  3. Calculate Reward =========== 
-        reward = 0.0
-        if terminated:
-            # Terminal transitions use only the configured death reward.
-            if self.CONFIG.use_survival_rewards:
-                reward = self.CONFIG.death_penalty
-        else:
-            if self.CONFIG.use_survival_rewards:
-                reward += self.CONFIG.alive_reward
-
-            if self.CONFIG.use_game_rewards:
-                event = self.game.get_last_placement_event()
-                if event.regular_t_spin:
-                    game_reward = self.CONFIG.t_spin_rewards.get(event.lines_cleared, 0.0)
-                else:
-                    game_reward = self.CONFIG.line_clear_rewards.get(event.lines_cleared, 0.0)
-                reward += game_reward * self.CONFIG.combo_reward_multiplier ** max(0, self.game.score_system.combo - 1)
-                if event.all_clear:
-                    reward += self.CONFIG.all_clear_reward
-
-            if self.CONFIG.use_heuristic_rewards:
-                self._heuristic_score = self.evaluator.evaluate(self.game.board).compute_total()
-                heuristic_delta = self._heuristic_score - heuristic_before
-                reward += float(np.clip(
-                    heuristic_delta * self.CONFIG.heuristic_reward_scale,
-                    -self.CONFIG.heuristic_reward_cap,
-                    self.CONFIG.heuristic_reward_cap,
-                ))
+        reward = self._manage_reward(
+            terminated=terminated,
+            was_garbage_incoming=was_garbage_incoming,
+            heuristic_before=heuristic_before
+        )
 
         
         # ===========  4. Get next states =========== 
@@ -129,6 +110,8 @@ class TetrisEnv(gym.Env):
             garbage_delay=self.CONFIG.garbage_delay,
             garbage_lines_probs=self.CONFIG.garbage_lines_probs,
             garbage_cap=self.CONFIG.garbage_cap,
+            piece_seed=seed,
+            garbage_rng=self.garbage_rng,
         )
         self.searcher = MoveSearcher(self.game, self.CONFIG, self.T_CONFIG_AUX)
         self._heuristic_score = (
@@ -138,6 +121,46 @@ class TetrisEnv(gym.Env):
         
         obs = self._get_obs()
         return obs, {}
+
+    def _manage_reward(self, terminated: bool, was_garbage_incoming: bool, heuristic_before: float) -> float:
+        # ============ Final ============ 
+        if terminated:
+            return self.CONFIG.death_penalty if self.CONFIG.use_survival_rewards else 0.0
+
+        # ============ Alive ============ 
+        reward = 0.0
+        if self.CONFIG.use_game_rewards:
+            event = self.game.get_last_placement_event()
+
+            if event.regular_t_spin:
+                game_reward = self.CONFIG.t_spin_rewards.get(event.lines_cleared, 0.0)
+            else:
+                game_reward = self.CONFIG.line_clear_rewards.get(event.lines_cleared, 0.0)
+
+            if event.all_clear:
+                reward += self.CONFIG.all_clear_reward
+
+            if was_garbage_incoming and event.lines_cleared > 0:
+                reward *= self.CONFIG.garbage_cleaner_reward_scale
+
+            reward += game_reward * self.CONFIG.combo_reward_multiplier ** max(0, self.game.score_system.combo - 1)
+
+
+        if self.CONFIG.use_heuristic_rewards:
+            self._heuristic_score = self.evaluator.evaluate(self.game.board).compute_total()
+            heuristic_delta = self._heuristic_score - heuristic_before
+            reward += float(np.clip(
+                heuristic_delta * self.CONFIG.heuristic_reward_scale,
+                -self.CONFIG.heuristic_reward_cap,
+                self.CONFIG.heuristic_reward_cap,
+            ))
+
+
+        if self.CONFIG.use_survival_rewards:
+            reward += self.CONFIG.alive_reward
+        # end else
+
+        return reward
 
     
     def _get_obs(self):
@@ -155,6 +178,10 @@ class TetrisEnv(gym.Env):
         True = Valid Move | False = Padded/Illegal Move
         """
         return self.searcher.valid_action_mask()
+
+    def refresh_observation(self):
+        """Rebuild the observation after external state changes, such as PvE garbage."""
+        return self._get_obs()
 
     def action_masks(self):
         return self.valid_action_mask()

@@ -1,6 +1,7 @@
 import unittest
 from collections import deque
 from pathlib import Path
+import random
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
@@ -8,7 +9,7 @@ import numpy as np
 
 from src.config import Configuration
 from src.data.tetrio import PrecomputedTetrioDataset, flip_rows
-from src.tetris import ActionEnum, Board, MoveSearcher, PieceEnum, ScoringSystem, SpinType, Tetris, TetrisConfiguration
+from src.tetris import ActionEnum, Board, MoveSearcher, PieceEnum, Queue, ScoringSystem, SpinType, Tetris, TetrisConfiguration
 
 
 class GarbageTests(unittest.TestCase):
@@ -83,6 +84,57 @@ class GarbageTests(unittest.TestCase):
         game.manage_garbage(cleared_lines=0, attack=0)
         self.assertEqual(game.get_incoming_garbage(), 1)
         np.testing.assert_array_equal(game.board.b_rows[:3], [14, 14, 14])
+
+    def test_external_garbage_is_processed_when_random_garbage_is_disabled(self):
+        game = Tetris(width=4, height=8, vanish_zone=0, garbage_prob=0, garbage_delay=7)
+        game.queue_garbage(lines=1, hole=0)
+
+        for _ in range(6):
+            game.manage_garbage(cleared_lines=0, attack=0)
+        self.assertEqual(game.get_incoming_garbage(), 1)
+        self.assertFalse(np.any(game.board.b_rows))
+
+        game.manage_garbage(cleared_lines=0, attack=0)
+        self.assertEqual(game.get_incoming_garbage(), 0)
+        self.assertEqual(int(game.board.b_rows[0]), 14)
+
+    def test_drop_processes_external_garbage_at_zero_probability(self):
+        game = Tetris(width=4, height=8, vanish_zone=0, garbage_prob=0, garbage_delay=1)
+        game.queue_garbage(lines=1, hole=0)
+
+        game.move_active_piece(ActionEnum.DROP)
+
+        self.assertEqual(int(game.board.b_rows[0]) & 1, 0)
+        self.assertEqual(game.get_incoming_garbage(), 0)
+
+    def test_uncancelled_attack_is_exposed_for_opponent(self):
+        game = Tetris(width=4, height=8, vanish_zone=0, garbage_prob=0)
+        game.queue_garbage(lines=1, hole=0)
+
+        game.manage_garbage(cleared_lines=0, attack=4)
+
+        self.assertEqual(game.last_outgoing_attack, 3)
+        self.assertEqual(game.get_incoming_garbage(), 0)
+
+    def test_seeded_queues_produce_the_same_bags(self):
+        first = Queue(rng=random.Random(1234))
+        second = Queue(rng=random.Random(1234))
+
+        self.assertEqual(
+            [first.pop_piece() for _ in range(35)],
+            [second.pop_piece() for _ in range(35)],
+        )
+
+    def test_piece_seed_does_not_control_garbage_holes(self):
+        first = Tetris(piece_seed=1234, garbage_prob=0, garbage_rng=random.Random(1))
+        second = Tetris(piece_seed=1234, garbage_prob=0, garbage_rng=random.Random(2))
+
+        self.assertEqual(first.active_piece.type, second.active_piece.type)
+        self.assertEqual(first.get_next_pieces(), second.get_next_pieces())
+
+        first.queue_garbage()
+        second.queue_garbage()
+        self.assertNotEqual(first.incoming_garbage[0][2], second.incoming_garbage[0][2])
 
     def test_scoring_returns_tetrio_attack(self):
         scoring = ScoringSystem()
