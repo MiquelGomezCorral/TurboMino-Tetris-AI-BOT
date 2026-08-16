@@ -9,3 +9,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["app"]
 include = ["src*", "scripts*"]
+
+[tool.pyright]
+include = ["app"]
+exclude = ["data/**", "logs/**", "models/**"]
+extraPaths = ["app"]
+typeCheckingMode = "off"
