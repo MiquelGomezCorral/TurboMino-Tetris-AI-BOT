@@ -117,47 +117,59 @@ def load_model(CONFIG: Configuration, T_CONFIG: TetrisConfiguration, env=None, l
     model_path = model_path or CONFIG.final_model_path
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
+
+    checkpoint_type = os.path.splitext(model_path)[1].lower()
+    if checkpoint_type not in {".ckpt", ".zip"}:
+        raise ValueError("Model path must point to a .ckpt or .zip checkpoint")
     
     env = env if env is not None else TetrisEnv(CONFIG, T_CONFIG)
 
-    if model_path.endswith('.ckpt'):
+    if checkpoint_type == ".ckpt":
         from .TurboMino import TurboMinoModule
-        model = TurboMinoModule.load_from_checkpoint(
+
+        pretrained_model = TurboMinoModule.load_from_checkpoint(
             model_path,
             weights_only=False,
         )
+        model = create_fresh_model(
+            CONFIG,
+            T_CONFIG,
+            env,
+            lr_schedule if lr_schedule is not None else CONFIG.learning_rate,
+        )
+        pretrained_model.transfer_encoder_weights(model.policy)
+        return model
 
-    else:
-        learning_rate = lr_schedule if lr_schedule is not None else CONFIG.learning_rate
-        custom_objects = {
-            "learning_rate": learning_rate,
-            "n_steps": CONFIG.rollout_steps(),
-            "batch_size": CONFIG.batch_size,
-            "n_epochs": CONFIG.n_epochs,
-            "ent_coef": CONFIG.ent_coef,
-            "clip_range": CONFIG.clip_range,
-            "gamma": CONFIG.gamma,
-            'gae_lambda': CONFIG.gae_lambda,
-            "target_kl": CONFIG.target_kl,
-        }
-        try:
-            model = MaskablePPO.load(
-                model_path,
-                env=env,
-                tensorboard_log=CONFIG.log_dir,
-                custom_objects=custom_objects,
-            )
-        except ValueError:
-            saved_data, _, _ = load_from_zip_file(model_path, device="cpu")
-            if not _only_board_dtype_differs(saved_data["observation_space"], env.observation_space):
-                raise
-            model = MaskablePPO.load(
-                model_path,
-                env=None,
-                tensorboard_log=CONFIG.log_dir,
-                custom_objects=custom_objects,
-            )
-            _attach_compact_env(model, env)
+    learning_rate = lr_schedule if lr_schedule is not None else CONFIG.learning_rate
+    custom_objects = {
+        "learning_rate": learning_rate,
+        "n_steps": CONFIG.rollout_steps(),
+        "batch_size": CONFIG.batch_size,
+        "n_epochs": CONFIG.n_epochs,
+        "ent_coef": CONFIG.ent_coef,
+        "clip_range": CONFIG.clip_range,
+        "gamma": CONFIG.gamma,
+        'gae_lambda': CONFIG.gae_lambda,
+        "target_kl": CONFIG.target_kl,
+    }
+    try:
+        model = MaskablePPO.load(
+            model_path,
+            env=env,
+            tensorboard_log=CONFIG.log_dir,
+            custom_objects=custom_objects,
+        )
+    except ValueError:
+        saved_data, _, _ = load_from_zip_file(model_path, device="cpu")
+        if not _only_board_dtype_differs(saved_data["observation_space"], env.observation_space):
+            raise
+        model = MaskablePPO.load(
+            model_path,
+            env=None,
+            tensorboard_log=CONFIG.log_dir,
+            custom_objects=custom_objects,
+        )
+        _attach_compact_env(model, env)
 
     return model
 
