@@ -127,7 +127,7 @@ def _run_stage(
         n_eval_episodes=CONFIG.eval_episodes,
         max_pieces=CONFIG.max_eval_pieces,
         learned_ratio=CONFIG.curriculum_learned_ratio if use_curriculum_gate else None,
-        min_score=CONFIG.curriculum_min_eval_score,
+        min_reward=CONFIG.curriculum_min_eval_reward,
         eval_seed=CONFIG.eval_seed,
         best_model_path=CONFIG.best_model_path,
         model_path_template=os.path.join(
@@ -196,6 +196,9 @@ def _build_curriculum(CONFIG: Configuration, T_CONFIG: TetrisConfiguration):
 
 def _load_resume_context(CONFIG, T_CONFIG, stages):
     if not CONFIG.resume_model_path:
+        return None, 0
+
+    if os.path.splitext(CONFIG.resume_model_path)[1].lower() == ".ckpt":
         return None, 0
 
     resume_state = _load_resume_state(CONFIG.resume_model_path)
@@ -354,8 +357,6 @@ def _prepare_model(model, CONFIG, T_CONFIG, env):
         return model
 
     if CONFIG.resume_model_path:
-        if CONFIG.resume_model_path.endswith(".ckpt"):
-            raise ValueError("--resume_model_path must point to a MaskablePPO .zip checkpoint")
         model = load_model(
             CONFIG,
             T_CONFIG,
@@ -380,7 +381,11 @@ def _stage_progress(
     resume_state,
     resume_stage_index,
 ):
-    if CONFIG.resume_model_path and stage_idx == resume_stage_index:
+    is_ppo_resume = (
+        CONFIG.resume_model_path
+        and os.path.splitext(CONFIG.resume_model_path)[1].lower() == ".zip"
+    )
+    if is_ppo_resume and stage_idx == resume_stage_index:
         saved_curriculum = (resume_state or {}).get("curriculum", {})
         if saved_curriculum.get("board_width") == board_w:
             stage_start_global_steps = saved_curriculum.get(

@@ -23,7 +23,7 @@ eval_episodes: 100
 max_eval_pieces: 500
 run_final_eval: false
 curriculum_learned_ratio: 0.9
-curriculum_min_eval_reward: 100.0
+curriculum_min_eval_reward: 10
 
 # total_timesteps: 5000000
 
@@ -31,9 +31,6 @@ clear_lines_on_placement: true
 target_kl: 0.015
 
 curriculum:
-  4: 10000000
-  6: 10000000
-  8: 10000000
   10: 10000000
   -1: 5000000
 
@@ -43,26 +40,25 @@ random_width:
   8: 0.05
   10: 0.85
 
-garbage_prob: 0.0
+garbage_prob: 0.13
 
 use_survival_rewards: True
-use_heuristic_rewards: True
-use_game_rewards: False
+use_heuristic_rewards: False
+garbage_cleaner_reward_scale: 1.25
+use_game_rewards: True
 alive_reward: 0.1
-death_penalty: -5.0
+death_penalty: -10.0
 
-heuristic_reward_scale: 0.01
-heuristic_reward_cap: 0.1
 line_clear_rewards:
-  1: 1.0
-  2: 2.0
-  3: 3.0
-  4: 6.0
+  1: 0.1
+  2: 0.2
+  3: 0.3
+  4: 0.6
 t_spin_rewards:
-  1: 2.0
-  2: 6.0
-  3: 9.0
-all_clear_reward: 20.0
+  1: 0.2
+  2: 0.6
+  3: 0.9
+all_clear_reward: 2.0
 combo_reward_multiplier: 1.25
 
 # CAMBIAR QUITAR UNA RESIDUAL

@@ -2,7 +2,7 @@ import copy
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
 import numpy as np
@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from src.config import Configuration
+from src.models.callbacks import TetrisValidationCallback
 from src.models.TurboMino import BoardEncoder, TurboMinoEncoder, TurboMinoModule
 from src.models.gym_env import TetrisEnv
 from src.models.train_ppo import _stage_progress
@@ -18,6 +19,7 @@ from src.models.train_ppo_utils import (
     _save_resume_state,
     _stage_index_from_checkpoint,
 )
+from src.models.utils import load_model
 from src.tetris import TetrisConfiguration
 
 
@@ -187,6 +189,113 @@ class TurboMinoModuleTests(unittest.TestCase):
         self.assertEqual(metrics["val/acc_top5"], 1.0)
         self.assertEqual(metrics["val/acc_top10"], 1.0)
         self.assertTrue(all(call.kwargs["prog_bar"] for call in log.call_args_list))
+
+
+class CheckpointLoadingTests(unittest.TestCase):
+    def test_ckpt_transfers_encoder_weights_to_fresh_ppo_model(self):
+        config = Configuration()
+        tetris_config = TetrisConfiguration()
+        pretrained_model = Mock()
+        ppo_model = SimpleNamespace(policy=object())
+
+        with tempfile.NamedTemporaryFile(suffix=".ckpt") as checkpoint, \
+                patch("src.models.TurboMino.TurboMinoModule.load_from_checkpoint", return_value=pretrained_model) as load_checkpoint, \
+                patch("src.models.utils.create_fresh_model", return_value=ppo_model) as create_model:
+            result = load_model(config, tetris_config, model_path=checkpoint.name)
+
+        self.assertIs(result, ppo_model)
+        load_checkpoint.assert_called_once_with(checkpoint.name, weights_only=False)
+        create_model.assert_called_once()
+        pretrained_model.transfer_encoder_weights.assert_called_once_with(ppo_model.policy)
+
+    def test_zip_loads_existing_ppo_model(self):
+        config = Configuration()
+        tetris_config = TetrisConfiguration()
+        ppo_model = object()
+
+        with tempfile.NamedTemporaryFile(suffix=".zip") as checkpoint, \
+                patch("src.models.utils.MaskablePPO.load", return_value=ppo_model) as load_checkpoint:
+            result = load_model(config, tetris_config, model_path=checkpoint.name)
+
+        self.assertIs(result, ppo_model)
+        self.assertEqual(load_checkpoint.call_args.args[0], checkpoint.name)
+
+    def test_rejects_unsupported_checkpoint_extension(self):
+        config = Configuration()
+        tetris_config = TetrisConfiguration()
+
+        with tempfile.NamedTemporaryFile(suffix=".pth") as checkpoint:
+            with self.assertRaisesRegex(ValueError, r"\.ckpt or \.zip"):
+                load_model(config, tetris_config, model_path=checkpoint.name)
+
+
+class ValidationCallbackTests(unittest.TestCase):
+    def test_validation_overwrites_existing_timestep_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            model_path = os.path.join(directory, "eval_0_steps.zip")
+            with open(model_path, "wb") as checkpoint:
+                checkpoint.write(b"stale checkpoint")
+
+            model = Mock(num_timesteps=0)
+            callback = TetrisValidationCallback(
+                eval_env=SimpleNamespace(CONFIG=Configuration(), T_CONFIG=TetrisConfiguration()),
+                best_model_path=os.path.join(directory, "best_model.zip"),
+                n_eval_episodes=1,
+                max_pieces=1,
+                model_path_template=os.path.join(directory, "eval_{num_timesteps}_steps.zip"),
+            )
+            callback.model = model
+            model.get_logger.return_value = Mock()
+
+            with patch(
+                "src.models.callbacks.test_on_game",
+                return_value=([0.0], [1.0], [0], [1], [0], [0]),
+            ):
+                callback._run_evaluation()
+
+            model.save.assert_any_call(model_path)
+
+    def test_best_model_uses_environment_reward_not_game_score(self):
+        model = Mock(num_timesteps=0)
+        model.get_logger.return_value = Mock()
+        callback = TetrisValidationCallback(
+            eval_env=SimpleNamespace(CONFIG=Configuration(), T_CONFIG=TetrisConfiguration()),
+            best_model_path="best_model.zip",
+        )
+        callback.model = model
+
+        with patch(
+            "src.models.callbacks.test_on_game",
+            side_effect=[
+                ([1.0], [10_000.0], [0], [1], [0], [0]),
+                ([2.0], [1.0], [0], [1], [0], [0]),
+            ],
+        ):
+            callback._run_evaluation()
+            callback._run_evaluation()
+
+        self.assertEqual(callback.best_key, (2.0,))
+        self.assertEqual(model.save.call_count, 2)
+
+    def test_curriculum_gate_uses_environment_reward(self):
+        model = Mock(num_timesteps=0)
+        model.get_logger.return_value = Mock()
+        callback = TetrisValidationCallback(
+            eval_env=SimpleNamespace(CONFIG=Configuration(), T_CONFIG=TetrisConfiguration()),
+            best_model_path="best_model.zip",
+            learned_ratio=0.9,
+            min_reward=100.0,
+            max_pieces=1,
+        )
+        callback.model = model
+
+        with patch(
+            "src.models.callbacks.test_on_game",
+            return_value=([100.0], [0.0], [0], [1], [0], [0]),
+        ):
+            callback._run_evaluation()
+
+        self.assertTrue(callback.learned)
 
 
 class ResumeStateTests(unittest.TestCase):

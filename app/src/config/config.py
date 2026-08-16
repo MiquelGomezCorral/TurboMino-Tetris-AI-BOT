@@ -72,7 +72,7 @@ class Configuration:
     #                       PARAMETER RL
     # ===================================================================
 
-    gym_id:          str = None
+    gym_id: str = None
     
     max_placements: int = 156
     d_model: int = 156
@@ -85,7 +85,7 @@ class Configuration:
 
 
     net_arch: list[int] = field(default_factory=lambda: [156])
-    features_per_placement: int = 4
+    features_per_placement: int = 1
     learning_rate: float = 3e-4
     rollout_samples: int = 2_048
     ent_coef: float = 0.02
@@ -102,7 +102,7 @@ class Configuration:
     max_eval_pieces: int = 200
     run_final_eval: bool = False
     curriculum_learned_ratio: float = 0.9
-    curriculum_min_eval_score: float = 1_000.0
+    curriculum_min_eval_reward: float = 100.0
 
     total_timesteps: int = 5_000_000
 
@@ -112,6 +112,7 @@ class Configuration:
     use_game_rewards: bool = False
     alive_reward: float = 0.1
     death_penalty: float = -5.0
+    garbage_cleaner_reward_scale: float = 1.00 # Default vales, x1 does nothing
     heuristic_reward_scale: float = 0.01
     heuristic_reward_cap: float = 0.1
     line_clear_rewards: dict[int, float] = field(default_factory=lambda: {
@@ -128,7 +129,7 @@ class Configuration:
     all_clear_reward: float = 20.0
     combo_reward_multiplier: float = 1.25
 
-    garbage_prob: float = 0.13
+    garbage_prob: float = 0.13 # STIMATNED FROM TETR.IO DATA
     garbage_delay: int = 5
     garbage_cap: int = 8
     garbage_lines_probs: list[float] = field(default_factory=lambda: [

@@ -1,4 +1,3 @@
-import os
 from tqdm import tqdm
 from stable_baselines3.common.callbacks import BaseCallback
 import numpy as np
@@ -9,10 +8,10 @@ from .test import test_on_game
 # Callbacks for Stable Baselines3 training
 # ==========================================
 
-def _curriculum_gate_passed(scores, pieces, max_pieces: int, learned_ratio: float, min_score: float):
-    score_ratio = np.mean([score >= min_score for score in scores])
+def _curriculum_gate_passed(rewards, pieces, max_pieces: int, learned_ratio: float, min_reward: float):
+    reward_ratio = np.mean([reward >= min_reward for reward in rewards])
     survival_ratio = np.mean([piece >= max_pieces for piece in pieces])
-    return score_ratio >= learned_ratio and survival_ratio >= learned_ratio, score_ratio, survival_ratio
+    return reward_ratio >= learned_ratio and survival_ratio >= learned_ratio, reward_ratio, survival_ratio
 
 
 class PPOProgressCallback(BaseCallback):
@@ -92,7 +91,7 @@ class TetrisValidationCallback(BaseCallback):
     def __init__(
         self, eval_env, best_model_path: str, eval_freq: int = 10000, n_eval_episodes: int = 5,
         max_pieces: int = 100, learned_ratio: float | None = None,
-        min_score: float = 0.0, eval_seed: int | None = None,
+        min_reward: float = 0.0, eval_seed: int | None = None,
         model_path_template: str | None = None,
         on_best_model=None,
         verbose: int = 1,
@@ -103,7 +102,7 @@ class TetrisValidationCallback(BaseCallback):
         self.n_eval_episodes = n_eval_episodes
         self.max_pieces = max_pieces
         self.learned_ratio = learned_ratio
-        self.min_score = min_score
+        self.min_reward = min_reward
         self.eval_seed = eval_seed
         self.best_model_path = best_model_path
         self.model_path_template = model_path_template
@@ -130,9 +129,9 @@ class TetrisValidationCallback(BaseCallback):
             model_path = self.model_path_template.format(
                 num_timesteps=self.num_timesteps
             )
-            if not os.path.exists(model_path):
-                self.model.save(model_path)
-        rewards, scores, lines, pieces, all_clears, tetrises = test_on_game(
+            # Reuse of a timestep path must not load an older architecture from a previous run.
+            self.model.save(model_path)
+        rewards, game_scores, lines, pieces, all_clears, tetrises = test_on_game(
             CONFIG=self.eval_env.CONFIG,
             T_CONFIG=self.eval_env.T_CONFIG,
             eval_episodes=self.n_eval_episodes,
@@ -141,11 +140,14 @@ class TetrisValidationCallback(BaseCallback):
             eval_seed=self.eval_seed,
         )
 
-        mean_score = np.mean(scores)
-        self.logger.record("val/mean_reward", np.mean(rewards))
-        self.logger.record("val/min_score", np.min(scores))
-        self.logger.record("val/mean_score", mean_score)
-        self.logger.record("val/max_score", np.max(scores))
+        mean_reward = np.mean(rewards)
+        mean_game_score = np.mean(game_scores)
+        self.logger.record("val/mean_reward", mean_reward)
+        self.logger.record("val/min_reward", np.min(rewards))
+        self.logger.record("val/max_reward", np.max(rewards))
+        self.logger.record("val/mean_game_score", mean_game_score)
+        self.logger.record("val/min_game_score", np.min(game_scores))
+        self.logger.record("val/max_game_score", np.max(game_scores))
         self.logger.record("val/mean_lines_cleared", np.mean(lines))
         self.logger.record("val/min_pieces_placed", np.min(pieces))
         self.logger.record("val/mean_pieces_placed", np.mean(pieces))
@@ -155,23 +157,24 @@ class TetrisValidationCallback(BaseCallback):
 
         summary = (
             f"Validation @ {self.num_timesteps:_}: "
-            f"score min/avg/max={min(scores):.0f}/{mean_score:.1f}/{max(scores):.0f} | "
+            f"reward min/avg/max={min(rewards):.1f}/{mean_reward:.1f}/{max(rewards):.1f} | "
+            f"game score min/avg/max={min(game_scores):.0f}/{mean_game_score:.1f}/{max(game_scores):.0f} | "
             f"pieces min/avg/max={min(pieces)}/{np.mean(pieces):.1f}/{max(pieces)}"
         )
         if self.learned_ratio is not None:
-            self.learned, score_ratio, survival_ratio = _curriculum_gate_passed(
-                scores, pieces, self.max_pieces, self.learned_ratio, self.min_score,
+            self.learned, reward_ratio, survival_ratio = _curriculum_gate_passed(
+                rewards, pieces, self.max_pieces, self.learned_ratio, self.min_reward,
             )
-            self.logger.record("curriculum/score_ratio", score_ratio)
+            self.logger.record("curriculum/reward_ratio", reward_ratio)
             self.logger.record("curriculum/survival_ratio", survival_ratio)
             self.logger.record("curriculum/gate_passed", self.learned)
             best_key = (
-                (1, mean_score) if self.learned
-                else (0, min(score_ratio, survival_ratio), mean_score)
+                (1, mean_reward) if self.learned
+                else (0, min(reward_ratio, survival_ratio), mean_reward)
             )
-            summary += f" | score pass={score_ratio:.0%}, survival={survival_ratio:.0%}"
+            summary += f" | reward pass={reward_ratio:.0%}, survival={survival_ratio:.0%}"
         else:
-            best_key = (mean_score,)
+            best_key = (mean_reward,)
 
         tqdm.write(summary)
 
@@ -181,7 +184,7 @@ class TetrisValidationCallback(BaseCallback):
             if self.on_best_model:
                 self.on_best_model(self.best_model_path, self.num_timesteps, self.learned)
             if self.verbose > 0:
-                print(f"\n - New best validation score: {mean_score:.2f}! Model saved.")
+                print(f"\n - New best validation reward: {mean_reward:.2f}! Model saved.")
 
         if self.learned:
             tqdm.write("Curriculum gate passed.")
