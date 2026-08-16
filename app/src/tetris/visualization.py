@@ -49,7 +49,13 @@ def draw_text(CONFIG: TetrisConfiguration, surface, text: str, cell_x: int, cell
     surface.blit(label, (px, py))
 
 
-def render_game(CONFIG: TetrisConfiguration, surface, game, show_ghost: bool = True):
+def render_game(
+    CONFIG: TetrisConfiguration,
+    surface,
+    game,
+    show_ghost: bool = True,
+    show_game_over: bool = True,
+):
     """Draws the full game state (board, active piece, hold, next, stats) onto the surface."""
     total_h = game.board.height      # 24 (visible 20 + vanish 4)
     vis_h = game.board.visible_height
@@ -152,6 +158,6 @@ def render_game(CONFIG: TetrisConfiguration, surface, game, show_ghost: bool = T
     draw_text(CONFIG, surface, f"Score {ss.score}", CONFIG.next_offset_x, 16)
 
     # 10. Game Over overlay
-    if game.game_over:
+    if game.game_over and show_game_over:
         draw_text(CONFIG, surface, "GAME OVER", CONFIG.board_offset_x + 2, total_h + 1, font_size=50, color=CONFIG.game_over_color)
-        draw_text(CONFIG, surface, "Press R to restart", CONFIG.board_offset_x + 2.5, total_h + 2.5, font_size=30, color=CONFIG.game_over_color)
+        draw_text(CONFIG, surface, "Press P to restart", CONFIG.board_offset_x + 2.5, total_h + 2.5, font_size=30, color=CONFIG.game_over_color)
